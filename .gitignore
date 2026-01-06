@@ -1,0 +1,45 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# ===== Entornos =====
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+
+# ===== Cache / tooling =====
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
+
+# ===== Proyecto (tu estructura) =====
+uploads/
+thumbnails/
+
+# Si db.json es tu “base” local y no quieres versionarla:
+db.json
+
+# Si manejas variables de entorno
+.env
+.env.*

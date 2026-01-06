@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor Salchimonster</title>
+    <style>
+        :root {
+            --bg-body: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #8b5cf6;      /* Violeta vibrante */
+            --secondary: #10b981;    /* Verde esmeralda */
+            --danger: #ef4444;       /* Rojo */
+            --info: #0ea5e9;         /* Azul cielo (Nuevo para Copy) */
+            --border: #334155;
+            --radius: 0.3rem;        /* TU REGLA MAESTRA */
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            background: linear-gradient(to right, #c084fc, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.05rem;
+        }
+
+        /* --- CONTROLES Y INPUTS --- */
+        input[type="text"], input[type="file"], select {
+            background-color: var(--bg-body);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.7rem;
+            border-radius: var(--radius);
+            width: 100%;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-main {
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            width: 100%;
+        }
+        .btn-main:active { transform: translateY(2px); }
+        .btn-main:hover { opacity: 0.9; }
+
+        /* --- FORMULARIO SUBIDA --- */
+        .upload-card {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: var(--radius);
+            width: 100%;
+            max-width: 800px;
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: 1fr 1fr auto;
+            align-items: end;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        @media(max-width: 700px) { .upload-card { grid-template-columns: 1fr; } }
+
+        /* --- TOOLBAR DE FILTROS --- */
+        .toolbar {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sort-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        select.sort-select {
+            width: auto;
+            cursor: pointer;
+            background-color: var(--surface);
+        }
+
+        /* --- GRID --- */
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .video-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .video-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+        }
+
+        .thumb-container {
+            height: 170px;
+            background: #000;
+            position: relative;
+        }
+        .thumb-container img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+
+        /* Badge de Vistas */
+        .views-badge {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius);
+            font-size: 0.75rem;
+            font-weight: bold;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .info { padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; flex: 1; }
+        .video-title { margin: 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+
+        /* --- ACCIONES (NUEVO GRID 3 COLUMNAS) --- */
+        .actions {
+            margin-top: auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr; /* 3 Botones iguales */
+            gap: 0.5rem;
+        }
+
+        .btn-act {
+            padding: 0.5rem;
+            border-radius: var(--radius);
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: inherit;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .btn-act:active { transform: scale(0.95); }
+
+        /* Colores Botones */
+        .view { background: rgba(16, 185, 129, 0.1); color: var(--secondary); }
+        .view:hover { background: rgba(16, 185, 129, 0.2); }
+
+        .copy { background: rgba(14, 165, 233, 0.1); color: var(--info); }
+        .copy:hover { background: rgba(14, 165, 233, 0.2); }
+
+        .del { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        .del:hover { background: rgba(239, 68, 68, 0.2); }
+
+        /* Twitter Group */
+        .tw-group { display: flex; gap: 0.5rem; }
+        .btn-icon { width: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); border:none; background: var(--info); color: white; cursor: pointer; transition: opacity 0.2s; }
+        .btn-icon:hover { opacity: 0.8; }
+
+    </style>
+</head>
+<body>
+
+    <h1>Panel Admin <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
+
+    <div class="upload-card">
+        <div style="grid-column: 1/-1; display:none;" id="progressWrapper">
+            <div style="background:var(--bg-body); height:4px; border-radius:var(--radius); overflow:hidden;">
+                <div id="progressBar" style="width:0%; height:100%; background:var(--secondary); transition:width 0.2s;"></div>
+            </div>
+            <small style="color:var(--secondary); display:block; margin-top:5px; font-weight:bold;">Subiendo video...</small>
+        </div>
+
+        <div>
+            <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Título del Video</label>
+            <input type="text" id="vTitle" placeholder="Ej: Gameplay Ep. 1...">
+        </div>
+        <div>
+            <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Archivo MP4</label>
+            <input type="file" id="vFile" accept="video/*">
+        </div>
+        <button class="btn-main" onclick="uploadVideo()">Subir Video 🚀</button>
+    </div>
+
+    <div class="toolbar">
+        <span style="color:var(--text-muted); font-size:0.9rem;">Total videos: <strong style="color:var(--text-main);">{{ videos|length }}</strong></span>
+        
+        <div class="sort-control">
+            <label style="color:var(--text-muted); font-size:0.9rem;">Ordenar:</label>
+            <select class="sort-select" onchange="sortGrid(this.value)">
+                <option value="newest">📅 Recientes</option>
+                <option value="oldest">📅 Antiguos</option>
+                <option value="viewsDesc">👁️ Populares</option>
+                <option value="viewsAsc">👁️ Menos Vistos</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="video-grid" id="videoGrid">
+        {% for video in videos %}
+        <div class="video-card" 
+             id="card-{{ video.id }}" 
+             data-views="{{ video.views|default(0) }}" 
+             data-timestamp="{{ loop.index0 * -1 }}">
+             
+            <div class="thumb-container">
+                <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail">
+                <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
+            </div>
+            
+            <div class="info">
+                <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
+                
+                <div class="tw-group">
+                    <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social...">
+                    <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
+                </div>
+
+                <div class="actions">
+                    <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
+                    
+                    <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">Link 🔗</button>
+                    
+                    <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">Borrar</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        // --- 1. FUNCIÓN DE ORDENAMIENTO ---
+        function sortGrid(criteria) {
+            const grid = document.getElementById('videoGrid');
+            const cards = Array.from(grid.getElementsByClassName('video-card'));
+
+            cards.sort((a, b) => {
+                const viewsA = parseInt(a.getAttribute('data-views'));
+                const viewsB = parseInt(b.getAttribute('data-views'));
+                const timeA = parseFloat(a.getAttribute('data-timestamp') || 0); 
+                const timeB = parseFloat(b.getAttribute('data-timestamp') || 0);
+
+                if (criteria === 'viewsDesc') return viewsB - viewsA;
+                if (criteria === 'viewsAsc') return viewsA - viewsB;
+                if (criteria === 'newest') return timeB - timeA;
+                if (criteria === 'oldest') return timeA - timeB;
+            });
+
+            cards.forEach(card => grid.appendChild(card));
+        }
+
+        // --- 2. SUBIDA DE ARCHIVOS ---
+        function uploadVideo() {
+            const fileInput = document.getElementById('vFile');
+            const titleInput = document.getElementById('vTitle');
+            if(fileInput.files.length === 0) return alert("⚠️ Por favor selecciona un archivo.");
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("title", titleInput.value);
+
+            const xhr = new XMLHttpRequest();
+            document.getElementById('progressWrapper').style.display = 'block';
+            
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressBar').style.width = percent + '%';
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) location.reload();
+                else alert("❌ Error subiendo el video.");
+            };
+
+            xhr.open("POST", "/videos/upload", true);
+            xhr.send(formData);
+        }
+
+        // --- 3. GUARDAR TWITTER/SOCIAL ---
+        async function saveTwitter(id) {
+            const val = document.getElementById(`tw-${id}`).value;
+            const btn = document.querySelector(`#card-${id} .btn-icon`);
+            
+            // Efecto visual de carga
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "⏳";
+            
+            try {
+                await fetch('/videos/update_social', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: id, link: val })
+                });
+                btn.innerHTML = "✅"; // Éxito
+                setTimeout(() => btn.innerHTML = originalText, 1500);
+            } catch(e) { 
+                btn.innerHTML = "❌"; 
+                alert("Error de conexión");
+            }
+        }
+
+        // --- 4. BORRAR VIDEO ---
+        async function deleteVideo(id) {
+            if(!confirm("¿Estás seguro de que quieres borrar este video? No hay vuelta atrás.")) return;
+            try {
+                const res = await fetch(`/videos/delete/${id}`);
+                if(res.ok) {
+                    const card = document.getElementById(`card-${id}`);
+                    card.style.transform = "scale(0.9)";
+                    card.style.opacity = "0";
+                    setTimeout(() => card.remove(), 200); // Animación simple de salida
+                } else {
+                    alert("No se pudo borrar el video.");
+                }
+            } catch(e) { alert("Error de conexión"); }
+        }
+
+        // --- 5. COPIAR ENLACE (NUEVO) ---
+        function copyLink(btnElement, videoId) {
+            const fullUrl = `${window.location.origin}/videos/watch/${videoId}`;
+            
+            navigator.clipboard.writeText(fullUrl).then(() => {
+                // Feedback visual
+                const originalText = btnElement.innerHTML;
+                const originalBg = getComputedStyle(btnElement).backgroundColor;
+
+                btnElement.innerHTML = "¡Listo! ✨";
+                btnElement.style.background = "rgba(14, 165, 233, 0.3)";
+                btnElement.style.color = "#fff";
+                
+                setTimeout(() => {
+                    btnElement.innerHTML = originalText;
+                    btnElement.style.background = ""; // Reset al CSS
+                    btnElement.style.color = "";
+                }, 1500);
+            }).catch(err => {
+                console.error('Error al copiar:', err);
+                prompt("Copia el link manualmente:", fullUrl);
+            });
+        }
+    </script>
+</body>
+</html>
