@@ -3,17 +3,18 @@ import json
 import uuid
 import cv2
 import shutil
-import secrets  # <--- NUEVO: Para seguridad
+import secrets
 from pathlib import Path
+from typing import Optional # Importante para definir opcionales
 from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.security import HTTPBasic, HTTPBasicCredentials # <--- NUEVO: Autenticación
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from filelock import FileLock
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 templates = Jinja2Templates(directory="templates")
-security = HTTPBasic() # Instancia de seguridad
+security = HTTPBasic()
 
 # --- CONFIGURACIÓN ---
 UPLOAD_DIR = Path("uploads")
@@ -21,7 +22,7 @@ THUMB_DIR = Path("thumbnails")
 DB_FILE = Path("db.json")
 LOCK_FILE = Path("db.json.lock")
 
-# CREDENCIALES DE ADMIN (Cámbialas aquí)
+# CREDENCIALES DE ADMIN
 ADMIN_USER = "andrew19f"
 ADMIN_PASS = "1003.Pazw"
 
@@ -44,7 +45,7 @@ def save_db(data):
             json.dump(data, f, indent=4)
 
 def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verifica usuario y contraseña"""
+    """Verifica usuario y contraseña de forma segura"""
     correct_user = secrets.compare_digest(credentials.username, ADMIN_USER)
     correct_pass = secrets.compare_digest(credentials.password, ADMIN_PASS)
     
@@ -67,7 +68,7 @@ def generate_thumbnail(video_path: str, thumb_path: str):
 
 # --- RUTAS ---
 
-# AHORA PROTEGIDO: Requiere login
+# 1. MANAGER (PROTEGIDO)
 @router.get("/manager", response_class=HTMLResponse)
 async def video_manager(request: Request, username: str = Depends(get_current_username)):
     videos = load_db()
@@ -77,7 +78,7 @@ async def video_manager(request: Request, username: str = Depends(get_current_us
             
     return templates.TemplateResponse("manager.html", {"request": request, "videos": videos, "user": username})
 
-# PÚBLICO: Aquí contamos las vistas
+# 2. WATCH (PÚBLICO)
 @router.get("/watch/{video_id}", response_class=HTMLResponse)
 async def watch_video(request: Request, video_id: str):
     videos = load_db()
@@ -86,21 +87,25 @@ async def watch_video(request: Request, video_id: str):
     if not video:
         return HTMLResponse("<h1>Video no encontrado</h1>", status_code=404)
     
-    # --- LOGICA DE VISTAS ---
-    # Incrementamos vista y guardamos inmediatamente
+    # Lógica de vistas: Incrementamos y guardamos
     video["views"] = video.get("views", 0) + 1
-    save_db(videos) # Guardamos el cambio en el JSON
+    save_db(videos)
     
     return templates.TemplateResponse("watch.html", {"request": request, "video": video})
 
-# PROTEGIDO
+# 3. UPLOAD (PROTEGIDO)
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...), 
-    title: str = Form(...),
-    username: str = Depends(get_current_username) # Seguridad
+    title: Optional[str] = Form(None), # <--- AHORA ES OPCIONAL (acepta nulos)
+    username: str = Depends(get_current_username)
 ):
     unique_hash = uuid.uuid4().hex[:5]
+    
+    # <--- VALIDACIÓN: Si no hay título, usamos el hash
+    if not title:
+        title = unique_hash
+
     extension = file.filename.split(".")[-1]
     new_filename = f"{unique_hash}.{extension}"
     thumb_filename = f"{unique_hash}.jpg"
@@ -108,29 +113,32 @@ async def upload_video(
     video_path = UPLOAD_DIR / new_filename
     thumb_path = THUMB_DIR / thumb_filename
 
+    # Guardar video
     with open(video_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Generar miniatura
     try: generate_thumbnail(str(video_path), str(thumb_path))
     except: pass
 
+    # Actualizar BD
     db = load_db()
     new_entry = {
         "id": unique_hash,
-        "title": title,
+        "title": title, # Aquí va el título enviado o el hash
         "filename": new_filename,
         "thumb": thumb_filename,
         "twitter_link": "",
         "original_name": file.filename,
-        "views": 0, # <--- Inicializamos contador
-        "timestamp": os.path.getmtime(video_path) # Para ordenar por fecha real
+        "views": 0,
+        "timestamp": os.path.getmtime(video_path)
     }
     db.insert(0, new_entry) 
     save_db(db)
 
     return JSONResponse(content={"message": "Subido con éxito", "video": new_entry})
 
-# PROTEGIDO
+# 4. UPDATE SOCIAL (PROTEGIDO)
 @router.post("/update_social")
 async def update_social_link(data: dict = Body(...), username: str = Depends(get_current_username)):
     video_id = data.get("id")
@@ -145,7 +153,7 @@ async def update_social_link(data: dict = Body(...), username: str = Depends(get
     save_db(db)
     return JSONResponse(content={"status": "ok", "link": link})
 
-# PROTEGIDO
+# 5. DELETE (PROTEGIDO)
 @router.get("/delete/{video_id}")
 async def delete_video(video_id: str, username: str = Depends(get_current_username)):
     db = load_db()
