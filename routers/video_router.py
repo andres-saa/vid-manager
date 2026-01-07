@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -83,7 +83,7 @@ def _ensure_db_schema(db_raw: Any) -> Dict[str, Any]:
             projects.insert(0, {"id": DEFAULT_PROJECT_ID, "name": "General", "created_at": _now_ts()})
         db_raw["projects"] = projects
 
-        # asegurar project_id en videos
+        # asegurar project_id + campos en videos
         videos = db_raw.get("videos") or []
         for v in videos:
             if not v.get("project_id"):
@@ -123,7 +123,6 @@ def load_db() -> Dict[str, Any]:
     with FileLock(LOCK_FILE):
         raw = _read_json_file_nolock(DB_FILE, {"projects": [], "videos": []})
         db = _ensure_db_schema(raw)
-        # si migró desde lista u otra cosa, persistimos para que quede fijo
         _write_json_file_nolock(DB_FILE, db)
         return db
 
@@ -272,30 +271,79 @@ def increment_view_atomic_once_per_day(video_id: str, fingerprint: str, today_st
 # RUTAS
 # -----------------------------
 
-# 1) MANAGER (PROTEGIDO)
+# 1) MANAGER (PROTEGIDO) + filtro por proyecto
 @router.get("/manager", response_class=HTMLResponse)
-async def video_manager(request: Request, username: str = Depends(get_current_username)):
+async def video_manager(
+    request: Request,
+    project_id: Optional[str] = Query(default=None),
+    username: str = Depends(get_current_username),
+):
     db = load_db()
     projects = _all_projects_sorted(db)
     videos = db.get("videos", [])
 
-    # agrupar por proyectos
+    project_id = (project_id or "").strip()
+    valid_project_ids = {p.get("id") for p in projects if p.get("id")}
+
+    # ✅ Resolver proyecto seleccionado
+    if project_id == "__ALL__":
+        selected_pid = "__ALL__"
+    elif project_id and project_id in valid_project_ids:
+        selected_pid = project_id
+    else:
+        # si no mandan nada o es inválido: elegir el primer proyecto con videos, si no, general
+        by_pid_counts: Dict[str, int] = {}
+        for v in videos:
+            pid = v.get("project_id") or DEFAULT_PROJECT_ID
+            by_pid_counts[pid] = by_pid_counts.get(pid, 0) + 1
+
+        first_with_videos = None
+        for p in projects:
+            pid = p.get("id")
+            if by_pid_counts.get(pid, 0) > 0:
+                first_with_videos = pid
+                break
+
+        selected_pid = first_with_videos or DEFAULT_PROJECT_ID
+
+    # ✅ agrupar solo lo necesario
     by_project: Dict[str, List[Dict[str, Any]]] = {}
-    for v in videos:
-        pid = v.get("project_id") or DEFAULT_PROJECT_ID
-        by_project.setdefault(pid, []).append(v)
 
-    # mantener orden interno (por timestamp desc)
+    if selected_pid == "__ALL__":
+        # todos
+        for v in videos:
+            pid = v.get("project_id") or DEFAULT_PROJECT_ID
+            by_project.setdefault(pid, []).append(v)
+    else:
+        # solo el seleccionado
+        for v in videos:
+            pid = v.get("project_id") or DEFAULT_PROJECT_ID
+            if pid == selected_pid:
+                by_project.setdefault(pid, []).append(v)
+
+    # ✅ ORDEN DEFAULT: más visto -> menos visto (desempata por timestamp)
     for pid in by_project:
-        by_project[pid].sort(key=lambda x: float(x.get("timestamp", 0) or 0), reverse=True)
+        by_project[pid].sort(
+            key=lambda x: (
+                int(x.get("views", 0) or 0),
+                float(x.get("timestamp", 0) or 0),
+            ),
+            reverse=True,
+        )
 
+    # ✅ Renderizar solo el bloque requerido (si no es __ALL__)
     projects_with_videos = []
-    for p in projects:
+    if selected_pid == "__ALL__":
+        for p in projects:
+            pid = p.get("id")
+            projects_with_videos.append({"project": p, "videos": by_project.get(pid, [])})
+    else:
+        p = _find_project(db, selected_pid) or _find_project(db, DEFAULT_PROJECT_ID)
+        if not p:
+            # fallback ultra defensivo
+            p = {"id": DEFAULT_PROJECT_ID, "name": "General", "created_at": _now_ts()}
         pid = p.get("id")
-        projects_with_videos.append({
-            "project": p,
-            "videos": by_project.get(pid, [])
-        })
+        projects_with_videos.append({"project": p, "videos": by_project.get(pid, [])})
 
     total_videos = len(videos)
 
@@ -306,7 +354,9 @@ async def video_manager(request: Request, username: str = Depends(get_current_us
             "projects": projects,
             "projects_with_videos": projects_with_videos,
             "total_videos": total_videos,
-            "user": username
+            "user": username,
+            # ✅ clave para tu template
+            "selected_project_id": selected_pid,
         }
     )
 
@@ -354,14 +404,12 @@ async def create_project(data: dict = Body(...), username: str = Depends(get_cur
     if not name:
         raise HTTPException(status_code=400, detail="Nombre requerido")
 
-    # id corto
     new_id = uuid.uuid4().hex[:8]
 
     with FileLock(LOCK_FILE):
         raw = _read_json_file_nolock(DB_FILE, {"projects": [], "videos": []})
         db = _ensure_db_schema(raw)
 
-        # evitar duplicar nombre exacto (opcional)
         for p in db.get("projects", []):
             if (p.get("name") or "").strip().lower() == name.lower():
                 raise HTTPException(status_code=400, detail="Ya existe un proyecto con ese nombre")
@@ -393,10 +441,8 @@ async def delete_project(data: dict = Body(...), username: str = Depends(get_cur
         if not project:
             raise HTTPException(status_code=404, detail="Proyecto no existe")
 
-        # quitar proyecto
         db["projects"] = [p for p in db.get("projects", []) if p.get("id") != project_id]
 
-        # sacar videos de ese proyecto
         new_videos = []
         for v in db.get("videos", []):
             if (v.get("project_id") or DEFAULT_PROJECT_ID) == project_id:
@@ -409,11 +455,10 @@ async def delete_project(data: dict = Body(...), username: str = Depends(get_cur
         db["videos"] = new_videos
         _write_json_file_nolock(DB_FILE, db)
 
-        # limpiar guard (opcional)
         guard = _read_json_file_nolock(VIEW_GUARD_FILE, {})
         if guard and video_ids_deleted:
             to_remove = []
-            for k in guard.keys():
+            for k in list(guard.keys()):
                 vid = k.split("|", 1)[0]
                 if vid in video_ids_deleted:
                     to_remove.append(k)
@@ -421,7 +466,6 @@ async def delete_project(data: dict = Body(...), username: str = Depends(get_cur
                 guard.pop(k, None)
             _write_json_file_nolock(VIEW_GUARD_FILE, guard)
 
-    # borrar archivos fuera del lock
     for fn in files_to_delete:
         if fn:
             try:
@@ -446,6 +490,10 @@ async def move_video(data: dict = Body(...), username: str = Depends(get_current
 
     if not video_id or not project_id:
         raise HTTPException(status_code=400, detail="id y project_id requeridos")
+
+    # normaliza si llega "__ALL__" por error
+    if project_id == "__ALL__":
+        project_id = DEFAULT_PROJECT_ID
 
     with FileLock(LOCK_FILE):
         raw = _read_json_file_nolock(DB_FILE, {"projects": [], "videos": []})
@@ -496,8 +544,9 @@ async def upload_video(
     except Exception:
         pass
 
-    # validar proyecto
     project_id = (project_id or DEFAULT_PROJECT_ID).strip() or DEFAULT_PROJECT_ID
+    if project_id == "__ALL__":
+        project_id = DEFAULT_PROJECT_ID
 
     with FileLock(LOCK_FILE):
         raw = _read_json_file_nolock(DB_FILE, {"projects": [], "videos": []})
@@ -518,7 +567,6 @@ async def upload_video(
             "project_id": project_id,
         }
 
-        # al inicio
         db["videos"].insert(0, new_entry)
         _write_json_file_nolock(DB_FILE, db)
 
@@ -569,16 +617,14 @@ async def delete_video(video_id: str, username: str = Depends(get_current_userna
         db["videos"] = new_videos
         _write_json_file_nolock(DB_FILE, db)
 
-        # limpiar guard del video (opcional)
         guard = _read_json_file_nolock(VIEW_GUARD_FILE, {})
         if guard:
             prefix = f"{video_id}|"
-            keys = [k for k in guard.keys() if k.startswith(prefix)]
+            keys = [k for k in list(guard.keys()) if k.startswith(prefix)]
             for k in keys:
                 guard.pop(k, None)
             _write_json_file_nolock(VIEW_GUARD_FILE, guard)
 
-    # borrar archivos fuera del lock
     if filename_to_del:
         try:
             os.remove(UPLOAD_DIR / filename_to_del)
