@@ -5,8 +5,10 @@ import cv2
 import shutil
 import secrets
 from pathlib import Path
-from typing import Optional # Importante para definir opcionales
-from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status
+from typing import Optional
+
+# Nuevas importaciones necesarias
+from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -32,6 +34,7 @@ THUMB_DIR.mkdir(exist_ok=True)
 # --- FUNCIONES AUXILIARES ---
 
 def load_db():
+    """Lee la base de datos (Solo lectura segura)"""
     with FileLock(LOCK_FILE):
         if not DB_FILE.exists(): return []
         try:
@@ -40,7 +43,35 @@ def load_db():
         except: return []
 
 def save_db(data):
+    """Guarda en la base de datos (Escritura segura)"""
     with FileLock(LOCK_FILE):
+        with open(DB_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+
+def increment_view_atomic(video_id: str):
+    """
+    IMPORTANTE: Esta función maneja la concurrencia de los 8 workers.
+    Bloquea el archivo, lee, actualiza y guarda en una sola transacción.
+    Evita que dos visitas simultáneas se sobrescriban.
+    """
+    with FileLock(LOCK_FILE):
+        data = []
+        if DB_FILE.exists():
+            try:
+                with open(DB_FILE, "r") as f:
+                    data = json.load(f)
+            except: 
+                data = []
+        
+        # Buscar y actualizar dentro del bloqueo
+        for video in data:
+            if video["id"] == video_id:
+                # Asegurar que existe el campo y sumar
+                current_views = video.get("views", 0)
+                video["views"] = current_views + 1
+                break
+        
+        # Guardar inmediatamente antes de soltar el bloqueo
         with open(DB_FILE, "w") as f:
             json.dump(data, f, indent=4)
 
@@ -72,37 +103,53 @@ def generate_thumbnail(video_path: str, thumb_path: str):
 @router.get("/manager", response_class=HTMLResponse)
 async def video_manager(request: Request, username: str = Depends(get_current_username)):
     videos = load_db()
-    # Aseguramos que todos tengan el campo views
+    # Aseguramos que todos tengan el campo views para visualización
     for v in videos:
         if "views" not in v: v["views"] = 0
             
     return templates.TemplateResponse("manager.html", {"request": request, "videos": videos, "user": username})
 
-# 2. WATCH (PÚBLICO)
+# 2. WATCH (PÚBLICO - LÓGICA CORREGIDA)
 @router.get("/watch/{video_id}", response_class=HTMLResponse)
 async def watch_video(request: Request, video_id: str):
+    # Primero cargamos datos solo para mostrar el video (Lectura rápida)
     videos = load_db()
     video = next((v for v in videos if v["id"] == video_id), None)
     
     if not video:
         return HTMLResponse("<h1>Video no encontrado</h1>", status_code=404)
     
-    # Lógica de vistas: Incrementamos y guardamos
-    video["views"] = video.get("views", 0) + 1
-    save_db(videos)
+    # Preparamos la respuesta
+    response = templates.TemplateResponse("watch.html", {"request": request, "video": video})
     
-    return templates.TemplateResponse("watch.html", {"request": request, "video": video})
+    # --- LOGICA DE VISTA ÚNICA ---
+    # Nombre de la cookie única para este video
+    cookie_name = f"viewed_{video_id}"
+    
+    # Verificamos si la cookie YA existe en el navegador del usuario
+    if cookie_name not in request.cookies:
+        # 1. El usuario NO ha visto el video recientemente.
+        # 2. Ejecutamos la actualización atómica (segura para workers).
+        increment_view_atomic(video_id)
+        
+        # 3. Le ponemos la cookie para marcarlo como "Visto".
+        # max_age=86400 segundos equivale a 24 horas.
+        response.set_cookie(key=cookie_name, value="true", max_age=86400)
+    else:
+        # El usuario YA tiene la cookie, no hacemos nada (no sumamos la vista).
+        pass
+    
+    return response
 
 # 3. UPLOAD (PROTEGIDO)
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...), 
-    title: Optional[str] = Form(None), # <--- AHORA ES OPCIONAL (acepta nulos)
+    title: Optional[str] = Form(None), 
     username: str = Depends(get_current_username)
 ):
     unique_hash = uuid.uuid4().hex[:5]
     
-    # <--- VALIDACIÓN: Si no hay título, usamos el hash
     if not title:
         title = unique_hash
 
@@ -121,20 +168,28 @@ async def upload_video(
     try: generate_thumbnail(str(video_path), str(thumb_path))
     except: pass
 
-    # Actualizar BD
-    db = load_db()
-    new_entry = {
-        "id": unique_hash,
-        "title": title, # Aquí va el título enviado o el hash
-        "filename": new_filename,
-        "thumb": thumb_filename,
-        "twitter_link": "",
-        "original_name": file.filename,
-        "views": 0,
-        "timestamp": os.path.getmtime(video_path)
-    }
-    db.insert(0, new_entry) 
-    save_db(db)
+    # Actualizar BD (Usamos la función atómica save_db que ya tiene lock)
+    with FileLock(LOCK_FILE): # Bloqueo manual para Insertar al principio
+        db = []
+        if DB_FILE.exists():
+            try:
+                with open(DB_FILE, "r") as f: db = json.load(f)
+            except: pass
+            
+        new_entry = {
+            "id": unique_hash,
+            "title": title,
+            "filename": new_filename,
+            "thumb": thumb_filename,
+            "twitter_link": "",
+            "original_name": file.filename,
+            "views": 0,
+            "timestamp": os.path.getmtime(video_path)
+        }
+        db.insert(0, new_entry) 
+        
+        with open(DB_FILE, "w") as f:
+            json.dump(db, f, indent=4)
 
     return JSONResponse(content={"message": "Subido con éxito", "video": new_entry})
 
@@ -144,28 +199,53 @@ async def update_social_link(data: dict = Body(...), username: str = Depends(get
     video_id = data.get("id")
     link = data.get("link")
     
-    db = load_db()
-    for video in db:
-        if video["id"] == video_id:
-            video["twitter_link"] = link
-            break
+    # Bloqueo atómico para evitar corrupción si se actualiza mientras alguien ve videos
+    with FileLock(LOCK_FILE):
+        db = []
+        if DB_FILE.exists():
+            with open(DB_FILE, "r") as f: db = json.load(f)
+            
+        found = False
+        for video in db:
+            if video["id"] == video_id:
+                video["twitter_link"] = link
+                found = True
+                break
+        
+        if found:
+            with open(DB_FILE, "w") as f: json.dump(db, f, indent=4)
     
-    save_db(db)
     return JSONResponse(content={"status": "ok", "link": link})
 
 # 5. DELETE (PROTEGIDO)
 @router.get("/delete/{video_id}")
 async def delete_video(video_id: str, username: str = Depends(get_current_username)):
-    db = load_db()
-    video = next((v for v in db if v["id"] == video_id), None)
+    filename_to_del = None
+    thumb_to_del = None
     
-    if video:
-        try:
-            os.remove(UPLOAD_DIR / video["filename"])
-            os.remove(THUMB_DIR / video["thumb"])
-        except: pass
+    with FileLock(LOCK_FILE):
+        db = []
+        if DB_FILE.exists():
+            with open(DB_FILE, "r") as f: db = json.load(f)
         
-        db = [v for v in db if v["id"] != video_id]
-        save_db(db)
+        # Encontrar y sacar de la lista
+        new_db = []
+        for v in db:
+            if v["id"] == video_id:
+                filename_to_del = v["filename"]
+                thumb_to_del = v["thumb"]
+            else:
+                new_db.append(v)
+        
+        # Guardar la lista nueva
+        with open(DB_FILE, "w") as f: json.dump(new_db, f, indent=4)
+
+    # Borrar archivos físicos fuera del bloqueo (para no detener la DB)
+    if filename_to_del:
+        try: os.remove(UPLOAD_DIR / filename_to_del)
+        except: pass
+    if thumb_to_del:
+        try: os.remove(THUMB_DIR / thumb_to_del)
+        except: pass
         
     return JSONResponse(content={"status": "deleted"})
