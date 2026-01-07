@@ -4,11 +4,13 @@ import uuid
 import cv2
 import shutil
 import secrets
+import time
+import hashlib
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
-# Nuevas importaciones necesarias
-from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status, Response
+from fastapi import APIRouter, UploadFile, File, Request, Form, Body, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -22,64 +24,64 @@ security = HTTPBasic()
 UPLOAD_DIR = Path("uploads")
 THUMB_DIR = Path("thumbnails")
 DB_FILE = Path("db.json")
+
+# Lock único para TODO lo que toque archivos (db + guard)
 LOCK_FILE = Path("db.json.lock")
 
-# CREDENCIALES DE ADMIN
+# Guard para evitar duplicados por concurrencia / clientes sin cookies
+VIEW_GUARD_FILE = Path("view_guard.json")
+
+# Zona horaria Bogota (sin DST)
+BOGOTA_TZ = timezone(timedelta(hours=-5))
+
+# TTL del guard (segundos). 48h recomendado para cubrir “mismo día” + márgen.
+VIEW_GUARD_TTL_SECONDS = 48 * 3600
+
+# CREDENCIALES DE ADMIN (ideal: usar env vars)
 ADMIN_USER = "andrew19f"
 ADMIN_PASS = "1003.Pazw"
 
 UPLOAD_DIR.mkdir(exist_ok=True)
 THUMB_DIR.mkdir(exist_ok=True)
 
-# --- FUNCIONES AUXILIARES ---
+
+# -----------------------------
+# Helpers de lectura/escritura
+# -----------------------------
+def _read_json_file_nolock(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def _write_json_file_nolock(path: Path, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
 
 def load_db():
-    """Lee la base de datos (Solo lectura segura)"""
+    """Lectura segura de DB"""
     with FileLock(LOCK_FILE):
-        if not DB_FILE.exists(): return []
-        try:
-            with open(DB_FILE, "r") as f:
-                return json.load(f)
-        except: return []
+        return _read_json_file_nolock(DB_FILE, [])
+
 
 def save_db(data):
-    """Guarda en la base de datos (Escritura segura)"""
+    """Escritura segura de DB"""
     with FileLock(LOCK_FILE):
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f, indent=4)
+        _write_json_file_nolock(DB_FILE, data)
 
-def increment_view_atomic(video_id: str):
-    """
-    IMPORTANTE: Esta función maneja la concurrencia de los 8 workers.
-    Bloquea el archivo, lee, actualiza y guarda en una sola transacción.
-    Evita que dos visitas simultáneas se sobrescriban.
-    """
-    with FileLock(LOCK_FILE):
-        data = []
-        if DB_FILE.exists():
-            try:
-                with open(DB_FILE, "r") as f:
-                    data = json.load(f)
-            except: 
-                data = []
-        
-        # Buscar y actualizar dentro del bloqueo
-        for video in data:
-            if video["id"] == video_id:
-                # Asegurar que existe el campo y sumar
-                current_views = video.get("views", 0)
-                video["views"] = current_views + 1
-                break
-        
-        # Guardar inmediatamente antes de soltar el bloqueo
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f, indent=4)
 
+# -----------------------------
+# Seguridad Basic Auth
+# -----------------------------
 def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verifica usuario y contraseña de forma segura"""
     correct_user = secrets.compare_digest(credentials.username, ADMIN_USER)
     correct_pass = secrets.compare_digest(credentials.password, ADMIN_PASS)
-    
+
     if not (correct_user and correct_pass):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -88,75 +90,209 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+
+# -----------------------------
+# Thumbnail
+# -----------------------------
 def generate_thumbnail(video_path: str, thumb_path: str):
     cap = cv2.VideoCapture(video_path)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2) # Frame central
-    ret, frame = cap.read()
-    if ret:
-        cv2.imwrite(thumb_path, frame)
-    cap.release()
+    try:
+        if not cap.isOpened():
+            return
 
-# --- RUTAS ---
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if total_frames > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+        else:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+        ret, frame = cap.read()
+        if ret and frame is not None:
+            cv2.imwrite(thumb_path, frame)
+    finally:
+        cap.release()
+
+
+# -----------------------------
+# Fingerprint (respaldo)
+# -----------------------------
+def _get_client_ip(request: Request) -> str:
+    """
+    Saca IP real si Nginx envía X-Forwarded-For.
+    Si no, cae a request.client.host.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        # Primer IP de la cadena
+        return xff.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "0.0.0.0"
+
+
+def _client_fingerprint(request: Request) -> str:
+    """
+    Fingerprint estable (no perfecto, pero útil para dedupe):
+    IP + User-Agent + Accept-Language.
+    """
+    ip = _get_client_ip(request)
+    ua = request.headers.get("user-agent", "")
+    al = request.headers.get("accept-language", "")
+    raw = f"{ip}|{ua}|{al}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(raw).hexdigest()[:24]
+
+
+def _today_bogota_str() -> str:
+    return datetime.now(BOGOTA_TZ).date().isoformat()
+
+
+def _is_https_request(request: Request) -> bool:
+    """
+    Útil para set_cookie(secure=True) cuando vas por HTTPS detrás de Nginx.
+    """
+    xfproto = request.headers.get("x-forwarded-proto", "").lower()
+    if xfproto == "https":
+        return True
+    return request.url.scheme == "https"
+
+
+# -----------------------------
+# Conteo atómico y dedupe por día
+# -----------------------------
+def increment_view_atomic_once_per_day(video_id: str, fingerprint: str, today_str: str) -> Optional[int]:
+    """
+    Cuenta 1 vista SOLO si este fingerprint no ha contado HOY para este video.
+    Todo ocurre dentro de un único lock -> seguro con 8 workers.
+
+    Retorna el nuevo total de views si contó, o None si NO contó.
+    """
+    now_ts = int(time.time())
+
+    with FileLock(LOCK_FILE):
+        # 1) Leer DB
+        db = _read_json_file_nolock(DB_FILE, [])
+        vid = None
+        for v in db:
+            if v.get("id") == video_id:
+                vid = v
+                break
+        if not vid:
+            return None
+
+        # Asegurar campo views
+        current_views = int(vid.get("views", 0) or 0)
+
+        # 2) Leer guard
+        guard: Dict[str, Any] = _read_json_file_nolock(VIEW_GUARD_FILE, {})
+
+        # 3) Limpiar guard viejo (TTL)
+        # guard estructura: { "<video_id>|<fingerprint>": {"date": "YYYY-MM-DD", "ts": 123} }
+        cutoff = now_ts - VIEW_GUARD_TTL_SECONDS
+        if guard:
+            to_del = []
+            for k, info in guard.items():
+                ts = int((info or {}).get("ts", 0) or 0)
+                if ts < cutoff:
+                    to_del.append(k)
+            for k in to_del:
+                guard.pop(k, None)
+
+        # 4) Verificar si ya contó hoy
+        key = f"{video_id}|{fingerprint}"
+        info = guard.get(key)
+        if info and info.get("date") == today_str:
+            # Ya contado hoy -> no incrementa
+            # Igual actualizamos ts para extender TTL un poco con actividad
+            guard[key] = {"date": today_str, "ts": now_ts}
+            _write_json_file_nolock(VIEW_GUARD_FILE, guard)
+            return None
+
+        # 5) Contar + guardar guard
+        new_views = current_views + 1
+        vid["views"] = new_views
+        guard[key] = {"date": today_str, "ts": now_ts}
+
+        # 6) Persistir DB + guard
+        _write_json_file_nolock(DB_FILE, db)
+        _write_json_file_nolock(VIEW_GUARD_FILE, guard)
+
+        return new_views
+
+
+# -----------------------------
+# RUTAS
+# -----------------------------
 
 # 1. MANAGER (PROTEGIDO)
 @router.get("/manager", response_class=HTMLResponse)
 async def video_manager(request: Request, username: str = Depends(get_current_username)):
     videos = load_db()
-    # Aseguramos que todos tengan el campo views para visualización
     for v in videos:
-        if "views" not in v: v["views"] = 0
-            
+        if "views" not in v:
+            v["views"] = 0
     return templates.TemplateResponse("manager.html", {"request": request, "videos": videos, "user": username})
 
-# 2. WATCH (PÚBLICO - LÓGICA CORREGIDA)
+
+# 2. WATCH (PÚBLICO - CORREGIDO)
 @router.get("/watch/{video_id}", response_class=HTMLResponse)
 async def watch_video(request: Request, video_id: str):
-    # Primero cargamos datos solo para mostrar el video (Lectura rápida)
+    # Cargar datos para mostrar video (lectura rápida)
     videos = load_db()
-    video = next((v for v in videos if v["id"] == video_id), None)
-    
+    video = next((v for v in videos if v.get("id") == video_id), None)
     if not video:
         return HTMLResponse("<h1>Video no encontrado</h1>", status_code=404)
-    
-    # Preparamos la respuesta
-    response = templates.TemplateResponse("watch.html", {"request": request, "video": video})
-    
-    # --- LOGICA DE VISTA ÚNICA ---
-    # Nombre de la cookie única para este video
+
+    today_str = _today_bogota_str()
+
+    # Cookie por video, valor = fecha (YYYY-MM-DD)
     cookie_name = f"viewed_{video_id}"
-    
-    # Verificamos si la cookie YA existe en el navegador del usuario
-    if cookie_name not in request.cookies:
-        # 1. El usuario NO ha visto el video recientemente.
-        # 2. Ejecutamos la actualización atómica (segura para workers).
-        increment_view_atomic(video_id)
-        
-        # 3. Le ponemos la cookie para marcarlo como "Visto".
-        # max_age=86400 segundos equivale a 24 horas.
-        response.set_cookie(key=cookie_name, value="true", max_age=86400)
-    else:
-        # El usuario YA tiene la cookie, no hacemos nada (no sumamos la vista).
-        pass
-    
+    cookie_val = request.cookies.get(cookie_name)
+
+    # Preparar response
+    response = templates.TemplateResponse("watch.html", {"request": request, "video": video})
+
+    # Si cookie ya dice "hoy", no intentamos contar (barato)
+    counted = False
+    if cookie_val != today_str:
+        fp = _client_fingerprint(request)
+        new_views = increment_view_atomic_once_per_day(video_id, fp, today_str)
+        if new_views is not None:
+            counted = True
+            # Para que el template muestre el número actualizado en esta misma carga:
+            try:
+                video["views"] = new_views
+            except Exception:
+                pass
+
+    # Setear/actualizar cookie SIEMPRE al día actual para bloquear re-conteo
+    # (aunque no haya contado por guard, igual evita que el navegador lo intente otra vez)
+    response.set_cookie(
+        key=cookie_name,
+        value=today_str,
+        max_age=400 * 24 * 3600,   # ~400 días, pero el valor cambia cada día que visite
+        samesite="lax",
+        secure=_is_https_request(request),
+        httponly=False,
+    )
+
     return response
+
 
 # 3. UPLOAD (PROTEGIDO)
 @router.post("/upload")
 async def upload_video(
-    file: UploadFile = File(...), 
-    title: Optional[str] = Form(None), 
-    username: str = Depends(get_current_username)
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    username: str = Depends(get_current_username),
 ):
     unique_hash = uuid.uuid4().hex[:5]
-    
     if not title:
         title = unique_hash
 
-    extension = file.filename.split(".")[-1]
+    extension = (file.filename.split(".")[-1] if file.filename and "." in file.filename else "mp4").lower()
     new_filename = f"{unique_hash}.{extension}"
     thumb_filename = f"{unique_hash}.jpg"
-    
+
     video_path = UPLOAD_DIR / new_filename
     thumb_path = THUMB_DIR / thumb_filename
 
@@ -165,17 +301,14 @@ async def upload_video(
         shutil.copyfileobj(file.file, buffer)
 
     # Generar miniatura
-    try: generate_thumbnail(str(video_path), str(thumb_path))
-    except: pass
+    try:
+        generate_thumbnail(str(video_path), str(thumb_path))
+    except Exception:
+        pass
 
-    # Actualizar BD (Usamos la función atómica save_db que ya tiene lock)
-    with FileLock(LOCK_FILE): # Bloqueo manual para Insertar al principio
-        db = []
-        if DB_FILE.exists():
-            try:
-                with open(DB_FILE, "r") as f: db = json.load(f)
-            except: pass
-            
+    # Insertar en DB al inicio (atómico)
+    with FileLock(LOCK_FILE):
+        db = _read_json_file_nolock(DB_FILE, [])
         new_entry = {
             "id": unique_hash,
             "title": title,
@@ -184,68 +317,70 @@ async def upload_video(
             "twitter_link": "",
             "original_name": file.filename,
             "views": 0,
-            "timestamp": os.path.getmtime(video_path)
+            "timestamp": os.path.getmtime(video_path),
         }
-        db.insert(0, new_entry) 
-        
-        with open(DB_FILE, "w") as f:
-            json.dump(db, f, indent=4)
+        db.insert(0, new_entry)
+        _write_json_file_nolock(DB_FILE, db)
 
     return JSONResponse(content={"message": "Subido con éxito", "video": new_entry})
+
 
 # 4. UPDATE SOCIAL (PROTEGIDO)
 @router.post("/update_social")
 async def update_social_link(data: dict = Body(...), username: str = Depends(get_current_username)):
     video_id = data.get("id")
-    link = data.get("link")
-    
-    # Bloqueo atómico para evitar corrupción si se actualiza mientras alguien ve videos
+    link = data.get("link", "")
+
     with FileLock(LOCK_FILE):
-        db = []
-        if DB_FILE.exists():
-            with open(DB_FILE, "r") as f: db = json.load(f)
-            
+        db = _read_json_file_nolock(DB_FILE, [])
         found = False
         for video in db:
-            if video["id"] == video_id:
+            if video.get("id") == video_id:
                 video["twitter_link"] = link
                 found = True
                 break
-        
         if found:
-            with open(DB_FILE, "w") as f: json.dump(db, f, indent=4)
-    
+            _write_json_file_nolock(DB_FILE, db)
+
     return JSONResponse(content={"status": "ok", "link": link})
+
 
 # 5. DELETE (PROTEGIDO)
 @router.get("/delete/{video_id}")
 async def delete_video(video_id: str, username: str = Depends(get_current_username)):
     filename_to_del = None
     thumb_to_del = None
-    
+
     with FileLock(LOCK_FILE):
-        db = []
-        if DB_FILE.exists():
-            with open(DB_FILE, "r") as f: db = json.load(f)
-        
-        # Encontrar y sacar de la lista
+        db = _read_json_file_nolock(DB_FILE, [])
         new_db = []
         for v in db:
-            if v["id"] == video_id:
-                filename_to_del = v["filename"]
-                thumb_to_del = v["thumb"]
+            if v.get("id") == video_id:
+                filename_to_del = v.get("filename")
+                thumb_to_del = v.get("thumb")
             else:
                 new_db.append(v)
-        
-        # Guardar la lista nueva
-        with open(DB_FILE, "w") as f: json.dump(new_db, f, indent=4)
+        _write_json_file_nolock(DB_FILE, new_db)
 
-    # Borrar archivos físicos fuera del bloqueo (para no detener la DB)
+        # También limpiamos entradas del guard de ese video (opcional)
+        guard = _read_json_file_nolock(VIEW_GUARD_FILE, {})
+        if guard:
+            prefix = f"{video_id}|"
+            keys = [k for k in guard.keys() if k.startswith(prefix)]
+            for k in keys:
+                guard.pop(k, None)
+            _write_json_file_nolock(VIEW_GUARD_FILE, guard)
+
+    # Borrar archivos fuera del lock
     if filename_to_del:
-        try: os.remove(UPLOAD_DIR / filename_to_del)
-        except: pass
+        try:
+            os.remove(UPLOAD_DIR / filename_to_del)
+        except Exception:
+            pass
     if thumb_to_del:
-        try: os.remove(THUMB_DIR / thumb_to_del)
-        except: pass
-        
+        try:
+            os.remove(THUMB_DIR / thumb_to_del)
+        except Exception:
+            pass
+
     return JSONResponse(content={"status": "deleted"})
