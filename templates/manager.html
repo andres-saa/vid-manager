@@ -1,395 +1,635 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor Salchimonster</title>
-    <style>
-        :root {
-            --bg-body: #0f172a;
-            --surface: #1e293b;
-            --surface-hover: #334155;
-            --text-main: #f1f5f9;
-            --text-muted: #94a3b8;
-            --primary: #8b5cf6;      /* Violeta vibrante */
-            --secondary: #10b981;    /* Verde esmeralda */
-            --danger: #ef4444;       /* Rojo */
-            --info: #0ea5e9;         /* Azul cielo (Nuevo para Copy) */
-            --border: #334155;
-            --radius: 0.3rem;        /* TU REGLA MAESTRA */
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestor Salchimonster</title>
+  <style>
+    :root {
+      --bg-body: #0f172a;
+      --surface: #1e293b;
+      --surface-hover: #334155;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #8b5cf6;      /* Violeta vibrante */
+      --secondary: #10b981;    /* Verde esmeralda */
+      --danger: #ef4444;       /* Rojo */
+      --info: #0ea5e9;         /* Azul cielo */
+      --border: #334155;
+      --radius: 0.3rem;        /* TU REGLA MAESTRA */
+    }
 
-        * { box-sizing: border-box; }
+    * { box-sizing: border-box; }
 
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            padding: 2rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
 
-        h1 {
-            background: linear-gradient(to right, #c084fc, #8b5cf6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 2rem;
-            font-weight: 800;
-            letter-spacing: -0.05rem;
-        }
+    h1 {
+      background: linear-gradient(to right, #c084fc, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.05rem;
+      text-align: center;
+    }
 
-        /* --- CONTROLES Y INPUTS --- */
-        input[type="text"], input[type="file"], select {
-            background-color: var(--bg-body);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 0.7rem;
-            border-radius: var(--radius);
-            width: 100%;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
+    input[type="text"], input[type="file"], select {
+      background-color: var(--bg-body);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 0.7rem;
+      border-radius: var(--radius);
+      width: 100%;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
 
-        input:focus, select:focus {
-            border-color: var(--primary);
-        }
+    input:focus, select:focus { border-color: var(--primary); }
 
-        .btn-main {
-            background: linear-gradient(135deg, var(--primary), #7c3aed);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: var(--radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.1s, opacity 0.2s;
-            width: 100%;
-        }
-        .btn-main:active { transform: translateY(2px); }
-        .btn-main:hover { opacity: 0.9; }
+    .btn-main {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius);
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      width: 100%;
+      white-space: nowrap;
+    }
+    .btn-main:active { transform: translateY(2px); }
+    .btn-main:hover { opacity: 0.9; }
 
-        /* --- FORMULARIO SUBIDA --- */
-        .upload-card {
-            background: var(--surface);
-            padding: 2rem;
-            border-radius: var(--radius);
-            width: 100%;
-            max-width: 800px;
-            border: 1px solid var(--border);
-            margin-bottom: 2rem;
-            display: grid;
-            gap: 1.5rem;
-            grid-template-columns: 1fr 1fr auto;
-            align-items: end;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
+    .btn-ghost {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-main);
+      padding: 0.7rem 1rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.04); border-color: var(--primary); }
 
-        @media(max-width: 700px) { .upload-card { grid-template-columns: 1fr; } }
+    .btn-danger {
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.08);
+      color: var(--danger);
+      padding: 0.6rem 0.9rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.16); }
 
-        /* --- TOOLBAR DE FILTROS --- */
-        .toolbar {
-            width: 100%;
-            max-width: 1200px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
+    /* --- UPLOAD CARD --- */
+    .upload-card {
+      background: var(--surface);
+      padding: 1.5rem;
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 1100px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.2rem;
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr;
+      align-items: end;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    @media(max-width: 900px) { .upload-card { grid-template-columns: 1fr; } }
 
-        .sort-control {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+    /* --- TOP BAR --- */
+    .topbar {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
 
-        select.sort-select {
-            width: auto;
-            cursor: pointer;
-            background-color: var(--surface);
-        }
+    .sort-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
 
-        /* --- GRID --- */
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-            width: 100%;
-            max-width: 1200px;
-        }
+    select.sort-select {
+      width: auto;
+      cursor: pointer;
+      background-color: var(--surface);
+    }
 
-        .video-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.2s, border-color 0.2s;
-            position: relative;
-        }
+    /* --- PROJECT HEADER --- */
+    .project-section {
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 1.8rem;
+    }
 
-        .video-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary);
-        }
+    .project-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.9rem 1rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
 
-        .thumb-container {
-            height: 170px;
-            background: #000;
-            position: relative;
-        }
-        .thumb-container img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+    .project-title {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
 
-        /* Badge de Vistas */
-        .views-badge {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 0.2rem 0.5rem;
-            border-radius: var(--radius);
-            font-size: 0.75rem;
-            font-weight: bold;
-            backdrop-filter: blur(4px);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
+    .project-title h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: -0.02rem;
+    }
 
-        .info { padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; flex: 1; }
-        .video-title { margin: 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+    .pill {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius);
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
+      font-weight: 800;
+    }
 
-        /* --- ACCIONES (NUEVO GRID 3 COLUMNAS) --- */
-        .actions {
-            margin-top: auto;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr; /* 3 Botones iguales */
-            gap: 0.5rem;
-        }
+    /* --- GRID --- */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+      width: 100%;
+    }
 
-        .btn-act {
-            padding: 0.5rem;
-            border-radius: var(--radius);
-            text-align: center;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: inherit;
-            transition: background 0.2s, transform 0.1s;
-        }
-        .btn-act:active { transform: scale(0.95); }
+    /* =========================================================
+       ✅ CARD 9:16 (la card completa)
+       ========================================================= */
+    .video-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.2s, border-color 0.2s;
 
-        /* Colores Botones */
-        .view { background: rgba(16, 185, 129, 0.1); color: var(--secondary); }
-        .view:hover { background: rgba(16, 185, 129, 0.2); }
+      /* 9/16 -> card alta tipo reel */
+      aspect-ratio: 9 / 16;
 
-        .copy { background: rgba(14, 165, 233, 0.1); color: var(--info); }
-        .copy:hover { background: rgba(14, 165, 233, 0.2); }
+      /* Layout interno fijo: 60% thumb, 40% info */
+      display: grid;
+      grid-template-rows: 60% 40%;
+      min-height: 0;
+    }
 
-        .del { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
-        .del:hover { background: rgba(239, 68, 68, 0.2); }
+    .video-card:hover { transform: translateY(-4px); border-color: var(--primary); }
 
-        /* Twitter Group */
-        .tw-group { display: flex; gap: 0.5rem; }
-        .btn-icon { width: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); border:none; background: var(--info); color: white; cursor: pointer; transition: opacity 0.2s; }
-        .btn-icon:hover { opacity: 0.8; }
+    .thumb-container {
+      background: #000;
+      position: relative;
+      min-height: 0;
+    }
 
-    </style>
+    /* ✅ miniatura contain */
+    .thumb-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      opacity: 0.95;
+      display: block;
+    }
+
+    .views-badge {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius);
+      font-size: 0.75rem;
+      font-weight: bold;
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .info {
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .video-title {
+      margin: 0;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-main);
+      font-weight: 800;
+    }
+
+    /* Controls inside card */
+    .row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .btn-icon {
+      width: 38px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius);
+      border: none;
+      background: var(--info);
+      color: white;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      height: 38px;
+    }
+    .btn-icon:active { transform: scale(0.95); }
+    .btn-icon:hover { opacity: 0.85; }
+
+    /* Actions 3 cols */
+    .actions {
+      margin-top: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .btn-act {
+      padding: 0.5rem;
+      border-radius: var(--radius);
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-act:active { transform: scale(0.95); }
+
+    .view { background: rgba(16, 185, 129, 0.1); color: var(--secondary); }
+    .view:hover { background: rgba(16, 185, 129, 0.2); }
+
+    .copy { background: rgba(14, 165, 233, 0.1); color: var(--info); }
+    .copy:hover { background: rgba(14, 165, 233, 0.2); }
+
+    .del { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+    .del:hover { background: rgba(239, 68, 68, 0.2); }
+
+    /* Progress */
+    #progressWrapper small { font-weight: 800; }
+  </style>
 </head>
+
 <body>
+  <h1>Panel Admin <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
 
-    <h1>Panel Admin <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
-
-    <div class="upload-card">
-        <div style="grid-column: 1/-1; display:none;" id="progressWrapper">
-            <div style="background:var(--bg-body); height:4px; border-radius:var(--radius); overflow:hidden;">
-                <div id="progressBar" style="width:0%; height:100%; background:var(--secondary); transition:width 0.2s;"></div>
-            </div>
-            <small style="color:var(--secondary); display:block; margin-top:5px; font-weight:bold;">Subiendo video...</small>
-        </div>
-
-        <div>
-            <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Título del Video</label>
-            <input type="text" id="vTitle" placeholder="Ej: Gameplay Ep. 1...">
-        </div>
-        <div>
-            <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Archivo MP4</label>
-            <input type="file" id="vFile" accept="video/*">
-        </div>
-        <button class="btn-main" onclick="uploadVideo()">Subir Video 🚀</button>
+  <!-- ================== UPLOAD + CREATE PROJECT ================== -->
+  <div class="upload-card">
+    <div style="grid-column: 1/-1; display:none;" id="progressWrapper">
+      <div style="background:var(--bg-body); height:4px; border-radius:var(--radius); overflow:hidden;">
+        <div id="progressBar" style="width:0%; height:100%; background:var(--secondary); transition:width 0.2s;"></div>
+      </div>
+      <small style="color:var(--secondary); display:block; margin-top:5px;">Subiendo video...</small>
     </div>
 
-    <div class="toolbar">
-        <span style="color:var(--text-muted); font-size:0.9rem;">Total videos: <strong style="color:var(--text-main);">{{ videos|length }}</strong></span>
-        
-        <div class="sort-control">
-            <label style="color:var(--text-muted); font-size:0.9rem;">Ordenar:</label>
-            <select class="sort-select" onchange="sortGrid(this.value)">
-                <option value="newest">📅 Recientes</option>
-                <option value="oldest">📅 Antiguos</option>
-                <option value="viewsDesc">👁️ Populares</option>
-                <option value="viewsAsc">👁️ Menos Vistos</option>
-            </select>
-        </div>
+    <div>
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Título del Video</label>
+      <input type="text" id="vTitle" placeholder="Ej: Gameplay Ep. 1..." />
     </div>
 
-    <div class="video-grid" id="videoGrid">
-        {% for video in videos %}
-        <div class="video-card" 
-             id="card-{{ video.id }}" 
-             data-views="{{ video.views|default(0) }}" 
-             data-timestamp="{{ loop.index0 * -1 }}">
-             
-            <div class="thumb-container">
-                <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail">
-                <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
-            </div>
-            
-            <div class="info">
-                <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
-                
-                <div class="tw-group">
-                    <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social...">
-                    <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
-                </div>
+    <div>
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Archivo MP4</label>
+      <input type="file" id="vFile" accept="video/*" />
+    </div>
 
-                <div class="actions">
-                    <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
-                    
-                    <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">Link 🔗</button>
-                    
-                    <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">Borrar</button>
-                </div>
-            </div>
-        </div>
+    <div>
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Proyecto</label>
+      <select id="vProject">
+        {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
         {% endfor %}
+      </select>
     </div>
 
-    <script>
-        // --- 1. FUNCIÓN DE ORDENAMIENTO ---
-        function sortGrid(criteria) {
-            const grid = document.getElementById('videoGrid');
-            const cards = Array.from(grid.getElementsByClassName('video-card'));
+    <button class="btn-main" onclick="uploadVideo()">Subir Video 🚀</button>
 
-            cards.sort((a, b) => {
-                const viewsA = parseInt(a.getAttribute('data-views'));
-                const viewsB = parseInt(b.getAttribute('data-views'));
-                const timeA = parseFloat(a.getAttribute('data-timestamp') || 0); 
-                const timeB = parseFloat(b.getAttribute('data-timestamp') || 0);
+    <div style="grid-column: 1/-1; display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="newProjectName" placeholder="Nuevo proyecto (Ej: Campaña Enero)" style="max-width:420px;" />
+      <button class="btn-ghost" onclick="createProject()">Crear proyecto ➕</button>
+      <span style="color:var(--text-muted); font-size:0.9rem;">
+        Total videos: <strong style="color:var(--text-main);">{{ total_videos }}</strong>
+      </span>
+    </div>
+  </div>
 
-                if (criteria === 'viewsDesc') return viewsB - viewsA;
-                if (criteria === 'viewsAsc') return viewsA - viewsB;
-                if (criteria === 'newest') return timeB - timeA;
-                if (criteria === 'oldest') return timeA - timeB;
-            });
+  <div class="topbar">
+    <div class="sort-control">
+      <label style="color:var(--text-muted); font-size:0.9rem;">Ordenar:</label>
+      <select class="sort-select" onchange="sortAllGrids(this.value)">
+        <option value="newest">📅 Recientes</option>
+        <option value="oldest">📅 Antiguos</option>
+        <option value="viewsDesc">👁️ Populares</option>
+        <option value="viewsAsc">👁️ Menos Vistos</option>
+      </select>
+    </div>
+  </div>
 
-            cards.forEach(card => grid.appendChild(card));
+  <!-- ================== PROJECT SECTIONS ================== -->
+  {% for project in projects_with_videos %}
+  <section class="project-section">
+    <div class="project-header">
+      <div class="project-title">
+        <h2>{{ project.project.name }}</h2>
+        <span class="pill">{{ project.videos|length }} videos</span>
+      </div>
+
+      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        {% if project.project.id != "general" %}
+          <button class="btn-danger" onclick="deleteProject('{{ project.project.id }}', '{{ project.project.name|e }}')">
+            Borrar proyecto 🧨
+          </button>
+        {% else %}
+          <span style="color:var(--text-muted); font-size:0.85rem;">(Proyecto base)</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="video-grid" data-grid="project" data-project-id="{{ project.project.id }}">
+      {% for video in project.videos %}
+      <div class="video-card"
+           id="card-{{ video.id }}"
+           data-views="{{ video.views|default(0) }}"
+           data-timestamp="{{ video.timestamp|default(0) }}">
+
+        <div class="thumb-container">
+          <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail" />
+          <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
+        </div>
+
+        <div class="info">
+          <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
+
+          <!-- Move project -->
+          <div class="row">
+            <select id="mv-{{ video.id }}" style="flex:1; background-color:var(--surface);">
+              {% for p in projects %}
+                <option value="{{ p.id }}" {% if p.id == video.project_id %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn-icon" onclick="moveVideo('{{ video.id }}')" title="Mover a proyecto">↪️</button>
+          </div>
+
+          <!-- Social -->
+          <div class="row">
+            <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social..." />
+            <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
+          </div>
+
+          <div class="actions">
+            <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
+
+            <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">
+              Link 🔗
+            </button>
+
+            <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">
+              Borrar
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <script>
+    function sortGrid(gridEl, criteria) {
+      const cards = Array.from(gridEl.getElementsByClassName('video-card'));
+
+      cards.sort((a, b) => {
+        const viewsA = parseInt(a.getAttribute('data-views') || "0");
+        const viewsB = parseInt(b.getAttribute('data-views') || "0");
+        const timeA = parseFloat(a.getAttribute('data-timestamp') || "0");
+        const timeB = parseFloat(b.getAttribute('data-timestamp') || "0");
+
+        if (criteria === 'viewsDesc') return viewsB - viewsA;
+        if (criteria === 'viewsAsc') return viewsA - viewsB;
+        if (criteria === 'newest') return timeB - timeA;
+        if (criteria === 'oldest') return timeA - timeB;
+        return 0;
+      });
+
+      cards.forEach(card => gridEl.appendChild(card));
+    }
+
+    function sortAllGrids(criteria) {
+      const grids = Array.from(document.querySelectorAll('[data-grid="project"]'));
+      grids.forEach(g => sortGrid(g, criteria));
+    }
+
+    // ---------- Upload ----------
+    function uploadVideo() {
+      const fileInput = document.getElementById('vFile');
+      const titleInput = document.getElementById('vTitle');
+      const projectSelect = document.getElementById('vProject');
+
+      if (fileInput.files.length === 0) return alert("⚠️ Por favor selecciona un archivo.");
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+      formData.append("title", titleInput.value);
+      formData.append("project_id", projectSelect.value);
+
+      const xhr = new XMLHttpRequest();
+      document.getElementById('progressWrapper').style.display = 'block';
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          document.getElementById('progressBar').style.width = percent + '%';
         }
+      };
 
-        // --- 2. SUBIDA DE ARCHIVOS ---
-        function uploadVideo() {
-            const fileInput = document.getElementById('vFile');
-            const titleInput = document.getElementById('vTitle');
-            if(fileInput.files.length === 0) return alert("⚠️ Por favor selecciona un archivo.");
+      xhr.onload = () => {
+        if (xhr.status === 200) location.reload();
+        else alert("❌ Error subiendo el video.");
+      };
 
-            const formData = new FormData();
-            formData.append("file", fileInput.files[0]);
-            formData.append("title", titleInput.value);
+      xhr.open("POST", "/videos/upload", true);
+      xhr.send(formData);
+    }
 
-            const xhr = new XMLHttpRequest();
-            document.getElementById('progressWrapper').style.display = 'block';
-            
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    document.getElementById('progressBar').style.width = percent + '%';
-                }
-            };
+    // ---------- Projects ----------
+    async function createProject() {
+      const name = (document.getElementById('newProjectName').value || "").trim();
+      if (!name) return alert("Escribe un nombre para el proyecto.");
 
-            xhr.onload = () => {
-                if (xhr.status === 200) location.reload();
-                else alert("❌ Error subiendo el video.");
-            };
+      try {
+        const res = await fetch('/videos/projects/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ name })
+        });
+        if (!res.ok) throw new Error("No se pudo crear");
+        location.reload();
+      } catch(e) {
+        alert("❌ Error creando proyecto.");
+      }
+    }
 
-            xhr.open("POST", "/videos/upload", true);
-            xhr.send(formData);
+    async function deleteProject(projectId, projectName) {
+      if (!confirm(`¿Borrar el proyecto "${projectName}"?\n\nEsto borrará también TODOS sus videos y archivos.`)) return;
+
+      try {
+        const res = await fetch('/videos/projects/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ project_id: projectId })
+        });
+        if (!res.ok) throw new Error("No se pudo borrar");
+        location.reload();
+      } catch(e) {
+        alert("❌ Error borrando proyecto.");
+      }
+    }
+
+    async function moveVideo(videoId) {
+      const sel = document.getElementById(`mv-${videoId}`);
+      const projectId = sel.value;
+
+      const btn = sel.parentElement.querySelector('.btn-icon');
+      const original = btn.innerHTML;
+      btn.innerHTML = "⏳";
+
+      try {
+        const res = await fetch('/videos/move', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ id: videoId, project_id: projectId })
+        });
+        if (!res.ok) throw new Error("No se pudo mover");
+
+        btn.innerHTML = "✅";
+        setTimeout(() => location.reload(), 450);
+      } catch(e) {
+        btn.innerHTML = original;
+        alert("❌ Error moviendo video.");
+      }
+    }
+
+    // ---------- Social ----------
+    async function saveTwitter(id) {
+      const val = document.getElementById(`tw-${id}`).value;
+      const btn = document.querySelector(`#card-${id} .row button[title="Guardar Link"]`);
+
+      const originalText = btn.innerHTML;
+      btn.innerHTML = "⏳";
+
+      try {
+        await fetch('/videos/update_social', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ id: id, link: val })
+        });
+        btn.innerHTML = "✅";
+        setTimeout(() => btn.innerHTML = originalText, 1200);
+      } catch(e) {
+        btn.innerHTML = "❌";
+        alert("Error de conexión");
+      }
+    }
+
+    // ---------- Delete video ----------
+    async function deleteVideo(id) {
+      if (!confirm("¿Estás seguro de que quieres borrar este video? No hay vuelta atrás.")) return;
+
+      try {
+        const res = await fetch(`/videos/delete/${id}`);
+        if (res.ok) {
+          const card = document.getElementById(`card-${id}`);
+          card.style.transform = "scale(0.9)";
+          card.style.opacity = "0";
+          setTimeout(() => card.remove(), 200);
+        } else {
+          alert("No se pudo borrar el video.");
         }
+      } catch(e) {
+        alert("Error de conexión");
+      }
+    }
 
-        // --- 3. GUARDAR TWITTER/SOCIAL ---
-        async function saveTwitter(id) {
-            const val = document.getElementById(`tw-${id}`).value;
-            const btn = document.querySelector(`#card-${id} .btn-icon`);
-            
-            // Efecto visual de carga
-            const originalText = btn.innerHTML;
-            btn.innerHTML = "⏳";
-            
-            try {
-                await fetch('/videos/update_social', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ id: id, link: val })
-                });
-                btn.innerHTML = "✅"; // Éxito
-                setTimeout(() => btn.innerHTML = originalText, 1500);
-            } catch(e) { 
-                btn.innerHTML = "❌"; 
-                alert("Error de conexión");
-            }
-        }
+    // ---------- Copy link ----------
+    function copyLink(btnElement, videoId) {
+      const fullUrl = `${window.location.origin}/videos/watch/${videoId}`;
 
-        // --- 4. BORRAR VIDEO ---
-        async function deleteVideo(id) {
-            if(!confirm("¿Estás seguro de que quieres borrar este video? No hay vuelta atrás.")) return;
-            try {
-                const res = await fetch(`/videos/delete/${id}`);
-                if(res.ok) {
-                    const card = document.getElementById(`card-${id}`);
-                    card.style.transform = "scale(0.9)";
-                    card.style.opacity = "0";
-                    setTimeout(() => card.remove(), 200); // Animación simple de salida
-                } else {
-                    alert("No se pudo borrar el video.");
-                }
-            } catch(e) { alert("Error de conexión"); }
-        }
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        const originalText = btnElement.innerHTML;
+        btnElement.innerHTML = "¡Listo! ✨";
+        btnElement.style.background = "rgba(14, 165, 233, 0.3)";
+        btnElement.style.color = "#fff";
 
-        // --- 5. COPIAR ENLACE (NUEVO) ---
-        function copyLink(btnElement, videoId) {
-            const fullUrl = `${window.location.origin}/videos/watch/${videoId}`;
-            
-            navigator.clipboard.writeText(fullUrl).then(() => {
-                // Feedback visual
-                const originalText = btnElement.innerHTML;
-                const originalBg = getComputedStyle(btnElement).backgroundColor;
-
-                btnElement.innerHTML = "¡Listo! ✨";
-                btnElement.style.background = "rgba(14, 165, 233, 0.3)";
-                btnElement.style.color = "#fff";
-                
-                setTimeout(() => {
-                    btnElement.innerHTML = originalText;
-                    btnElement.style.background = ""; // Reset al CSS
-                    btnElement.style.color = "";
-                }, 1500);
-            }).catch(err => {
-                console.error('Error al copiar:', err);
-                prompt("Copia el link manualmente:", fullUrl);
-            });
-        }
-    </script>
+        setTimeout(() => {
+          btnElement.innerHTML = originalText;
+          btnElement.style.background = "";
+          btnElement.style.color = "";
+        }, 1200);
+      }).catch(err => {
+        console.error('Error al copiar:', err);
+        prompt("Copia el link manualmente:", fullUrl);
+      });
+    }
+  </script>
 </body>
 </html>
