@@ -142,6 +142,20 @@
       background-color: var(--surface);
     }
 
+    .filter-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    select.filter-select {
+      width: auto;
+      cursor: pointer;
+      background-color: var(--surface);
+      min-width: 220px;
+    }
+
     /* --- PROJECT HEADER --- */
     .project-section {
       width: 100%;
@@ -334,6 +348,14 @@
 <body>
   <h1>Panel Admin <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
 
+  {# ======================
+     ✅ Proyecto seleccionado:
+     - Si backend pasa selected_project_id, se usa.
+     - Si NO, toma el primer proyecto que tenga videos.
+     ====================== #}
+  {% set _first_project_id = (projects_with_videos[0].project.id if projects_with_videos and projects_with_videos|length > 0 else 'general') %}
+  {% set selected_pid = (selected_project_id if selected_project_id is defined and selected_project_id else _first_project_id) %}
+
   <!-- ================== UPLOAD + CREATE PROJECT ================== -->
   <div class="upload-card">
     <div style="grid-column: 1/-1; display:none;" id="progressWrapper">
@@ -357,7 +379,7 @@
       <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Proyecto</label>
       <select id="vProject">
         {% for p in projects %}
-          <option value="{{ p.id }}">{{ p.name }}</option>
+          <option value="{{ p.id }}" {% if p.id == selected_pid %}selected{% endif %}>{{ p.name }}</option>
         {% endfor %}
       </select>
     </div>
@@ -374,84 +396,98 @@
   </div>
 
   <div class="topbar">
+    <!-- ✅ Filtro por proyecto (no renderizar todo) -->
+    <div class="filter-control">
+      <label style="color:var(--text-muted); font-size:0.9rem;">Proyecto:</label>
+      <select class="filter-select" id="projectFilter" onchange="filterByProject(this.value)">
+        <option value="__ALL__">📦 Todos</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if p.id == selected_pid %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <div class="sort-control">
       <label style="color:var(--text-muted); font-size:0.9rem;">Ordenar:</label>
-      <select class="sort-select" onchange="sortAllGrids(this.value)">
-        <option value="newest">📅 Recientes</option>
-        <option value="oldest">📅 Antiguos</option>
+      <select class="sort-select" id="sortSelect" onchange="sortAllGrids(this.value)">
         <option value="viewsDesc">👁️ Populares</option>
         <option value="viewsAsc">👁️ Menos Vistos</option>
+        <option value="newest">📅 Recientes</option>
+        <option value="oldest">📅 Antiguos</option>
       </select>
     </div>
   </div>
 
   <!-- ================== PROJECT SECTIONS ================== -->
+  {# ✅ Renderizar SOLO el proyecto seleccionado (o todos si __ALL__) #}
   {% for project in projects_with_videos %}
-  <section class="project-section">
-    <div class="project-header">
-      <div class="project-title">
-        <h2>{{ project.project.name }}</h2>
-        <span class="pill">{{ project.videos|length }} videos</span>
-      </div>
-
-      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-        {% if project.project.id != "general" %}
-          <button class="btn-danger" onclick="deleteProject('{{ project.project.id }}', '{{ project.project.name|e }}')">
-            Borrar proyecto 🧨
-          </button>
-        {% else %}
-          <span style="color:var(--text-muted); font-size:0.85rem;">(Proyecto base)</span>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="video-grid" data-grid="project" data-project-id="{{ project.project.id }}">
-      {% for video in project.videos %}
-      <div class="video-card"
-           id="card-{{ video.id }}"
-           data-views="{{ video.views|default(0) }}"
-           data-timestamp="{{ video.timestamp|default(0) }}">
-
-        <div class="thumb-container">
-          <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail" />
-          <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
-        </div>
-
-        <div class="info">
-          <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
-
-          <!-- Move project -->
-          <div class="row">
-            <select id="mv-{{ video.id }}" style="flex:1; background-color:var(--surface);">
-              {% for p in projects %}
-                <option value="{{ p.id }}" {% if p.id == video.project_id %}selected{% endif %}>{{ p.name }}</option>
-              {% endfor %}
-            </select>
-            <button class="btn-icon" onclick="moveVideo('{{ video.id }}')" title="Mover a proyecto">↪️</button>
+    {% if selected_pid == "__ALL__" or project.project.id == selected_pid %}
+      <section class="project-section">
+        <div class="project-header">
+          <div class="project-title">
+            <h2>{{ project.project.name }}</h2>
+            <span class="pill">{{ project.videos|length }} videos</span>
           </div>
 
-          <!-- Social -->
-          <div class="row">
-            <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social..." />
-            <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
-          </div>
-
-          <div class="actions">
-            <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
-
-            <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">
-              Link 🔗
-            </button>
-
-            <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">
-              Borrar
-            </button>
+          <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+            {% if project.project.id != "general" %}
+              <button class="btn-danger" onclick="deleteProject('{{ project.project.id }}', '{{ project.project.name|e }}')">
+                Borrar proyecto 🧨
+              </button>
+            {% else %}
+              <span style="color:var(--text-muted); font-size:0.85rem;">(Proyecto base)</span>
+            {% endif %}
           </div>
         </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
+
+        <div class="video-grid" data-grid="project" data-project-id="{{ project.project.id }}">
+          {% for video in project.videos %}
+            <div class="video-card"
+                 id="card-{{ video.id }}"
+                 data-views="{{ video.views|default(0) }}"
+                 data-timestamp="{{ video.timestamp|default(0) }}">
+
+              <div class="thumb-container">
+                <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail" />
+                <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
+              </div>
+
+              <div class="info">
+                <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
+
+                <!-- Move project -->
+                <div class="row">
+                  <select id="mv-{{ video.id }}" style="flex:1; background-color:var(--surface);">
+                    {% for p in projects %}
+                      <option value="{{ p.id }}" {% if p.id == video.project_id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn-icon" onclick="moveVideo('{{ video.id }}')" title="Mover a proyecto">↪️</button>
+                </div>
+
+                <!-- Social -->
+                <div class="row">
+                  <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social..." />
+                  <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
+                </div>
+
+                <div class="actions">
+                  <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
+
+                  <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">
+                    Link 🔗
+                  </button>
+
+                  <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">
+                    Borrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
   {% endfor %}
 
   <script>
@@ -477,6 +513,14 @@
     function sortAllGrids(criteria) {
       const grids = Array.from(document.querySelectorAll('[data-grid="project"]'));
       grids.forEach(g => sortGrid(g, criteria));
+    }
+
+    // ✅ Filtro por proyecto (server-side via query param)
+    function filterByProject(projectId) {
+      const url = new URL(window.location.href);
+      // si eliges "Todos", lo mandamos como __ALL__ (y el template lo soporta)
+      url.searchParams.set('project_id', projectId);
+      window.location.href = url.toString();
     }
 
     // ---------- Upload ----------
@@ -630,6 +674,29 @@
         prompt("Copia el link manualmente:", fullUrl);
       });
     }
+
+    // ✅ Default: ordenar por MÁS VISTO al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      const sortSel = document.getElementById('sortSelect');
+      if (sortSel) sortSel.value = 'viewsDesc';
+      sortAllGrids('viewsDesc');
+
+      // Sincroniza el select del filtro con el query param si existe
+      const url = new URL(window.location.href);
+      const qpid = url.searchParams.get('project_id');
+      const filterSel = document.getElementById('projectFilter');
+      if (filterSel && qpid) {
+        filterSel.value = qpid;
+        // si estás filtrando por __ALL__, en upload preferimos el primero real (evita subir al "Todos")
+        if (qpid !== '__ALL__') {
+          const uploadSel = document.getElementById('vProject');
+          if (uploadSel) uploadSel.value = qpid;
+        }
+      } else {
+        // si no hay query, deja el upload al seleccionado por Jinja (selected_pid)
+        // (ya viene marcado en el HTML)
+      }
+    });
   </script>
 </body>
 </html>
