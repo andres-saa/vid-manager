@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestor Salchimonster</title>
+  <title>Gestor de Cursos</title>
   <style>
     :root {
       --bg-body: #0f172a;
@@ -109,7 +109,7 @@
       margin-bottom: 1.2rem;
       display: grid;
       gap: 1rem;
-      grid-template-columns: 1.2fr 1.2fr 1fr 0.8fr;
+      grid-template-columns: 1.2fr 1.2fr 1fr 1fr 0.8fr;
       align-items: end;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
@@ -129,41 +129,29 @@
       flex-wrap: wrap;
     }
 
-    .sort-control {
+    .sort-control, .filter-control {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       flex-wrap: wrap;
     }
 
-    select.sort-select {
+    select.sort-select, select.filter-select {
       width: auto;
       cursor: pointer;
       background-color: var(--surface);
     }
 
-    .filter-control {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
+    select.filter-select { min-width: 220px; }
 
-    select.filter-select {
-      width: auto;
-      cursor: pointer;
-      background-color: var(--surface);
-      min-width: 220px;
-    }
-
-    /* --- PROJECT HEADER --- */
-    .project-section {
+    /* --- SECTION HEADERS --- */
+    .school-section {
       width: 100%;
       max-width: 1200px;
       margin-bottom: 1.8rem;
     }
 
-    .project-header {
+    .school-header, .course-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -176,19 +164,20 @@
       flex-wrap: wrap;
     }
 
-    .project-title {
+    .title-row {
       display: flex;
       align-items: baseline;
       gap: 0.75rem;
       flex-wrap: wrap;
     }
 
-    .project-title h2 {
+    .title-row h2, .title-row h3 {
       margin: 0;
-      font-size: 1.05rem;
-      font-weight: 800;
+      font-weight: 900;
       letter-spacing: -0.02rem;
     }
+    .title-row h2 { font-size: 1.1rem; }
+    .title-row h3 { font-size: 1.0rem; opacity: 0.95; }
 
     .pill {
       font-size: 0.75rem;
@@ -200,18 +189,27 @@
       font-weight: 800;
     }
 
+    .pill2 {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius);
+      background: rgba(16, 185, 129, 0.10);
+      border: 1px solid rgba(16, 185, 129, 0.22);
+      color: #a7f3d0;
+      font-weight: 800;
+    }
+
     /* --- GRID --- */
-    .video-grid {
+    .class-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 1rem;
       width: 100%;
+      margin-bottom: 1.25rem;
     }
 
-    /* =========================================================
-       ✅ CARD 9:16 (la card completa)
-       ========================================================= */
-    .video-card {
+    /* --- CARD 9:16 --- */
+    .class-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -219,16 +217,13 @@
       position: relative;
       transition: transform 0.2s, border-color 0.2s;
 
-      /* 9/16 -> card alta tipo reel */
       aspect-ratio: 9 / 16;
-
-      /* Layout interno fijo: 60% thumb, 40% info */
       display: grid;
       grid-template-rows: 60% 40%;
       min-height: 0;
     }
 
-    .video-card:hover { transform: translateY(-4px); border-color: var(--primary); }
+    .class-card:hover { transform: translateY(-4px); border-color: var(--primary); }
 
     .thumb-container {
       background: #000;
@@ -236,7 +231,6 @@
       min-height: 0;
     }
 
-    /* ✅ miniatura contain */
     .thumb-container img {
       width: 100%;
       height: 100%;
@@ -271,17 +265,16 @@
       overflow: hidden;
     }
 
-    .video-title {
+    .class-title {
       margin: 0;
       font-size: 0.95rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       color: var(--text-main);
-      font-weight: 800;
+      font-weight: 900;
     }
 
-    /* Controls inside card */
     .row {
       display: flex;
       gap: 0.5rem;
@@ -305,7 +298,6 @@
     .btn-icon:active { transform: scale(0.95); }
     .btn-icon:hover { opacity: 0.85; }
 
-    /* Actions 3 cols */
     .actions {
       margin-top: auto;
       display: grid;
@@ -318,7 +310,7 @@
       border-radius: var(--radius);
       text-align: center;
       font-size: 0.82rem;
-      font-weight: 800;
+      font-weight: 900;
       cursor: pointer;
       text-decoration: none;
       border: none;
@@ -340,69 +332,135 @@
     .del { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
     .del:hover { background: rgba(239, 68, 68, 0.2); }
 
-    /* Progress */
-    #progressWrapper small { font-weight: 800; }
+    #progressWrapper small { font-weight: 900; }
   </style>
 </head>
 
 <body>
-  <h1>Panel Admin <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
+  <h1>Gestor de Cursos <span style="font-size:0.5em; opacity:0.5; font-weight:400;">🔒 {{ user }}</span></h1>
 
-  {# ======================
-     ✅ Proyecto seleccionado:
-     - Si backend pasa selected_project_id, se usa.
-     - Si NO, toma el primer proyecto que tenga videos.
-     ====================== #}
-  {% set _first_project_id = (projects_with_videos[0].project.id if projects_with_videos and projects_with_videos|length > 0 else 'general') %}
-  {% set selected_pid = (selected_project_id if selected_project_id is defined and selected_project_id else _first_project_id) %}
+  {# =========================================================
+     ✅ ESTRUCTURA ESPERADA (recomendada)
+     schools_tree = [
+       {
+         "school": {"id": "...", "name": "..."},
+         "courses": [
+           {
+             "course": {"id": "...", "name": "...", "school_id": "..."},
+             "classes": [
+               {"id": "...", "title": "...", "thumb": "...", "views": 0, "timestamp": 0, "social_link": "", "course_id": "..."}
+             ]
+           }
+         ]
+       }
+     ]
+     Además:
+       schools_flat = [{"id","name"}] (opcional, si no, se puede derivar)
+       total_classes = int
+       selected_school_id (query param) y selected_course_id (query param)
+     ========================================================= #}
 
-  <!-- ================== UPLOAD + CREATE PROJECT ================== -->
+  {% set selected_sid = (selected_school_id if selected_school_id is defined and selected_school_id else "__ALL__") %}
+  {% set selected_cid = (selected_course_id if selected_course_id is defined and selected_course_id else "__ALL__") %}
+
+  {# Sacar un course por defecto para el upload (primer curso disponible) #}
+  {% set ns = namespace(first_course_id="") %}
+  {% for s in schools_tree %}
+    {% for c in s.courses %}
+      {% if not ns.first_course_id %}
+        {% set ns.first_course_id = c.course.id %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+  {% set default_upload_course_id = (ns.first_course_id if ns.first_course_id else "") %}
+
+  <!-- ================== UPLOAD (CLASE) + CREATE SCHOOL/COURSE ================== -->
   <div class="upload-card">
     <div style="grid-column: 1/-1; display:none;" id="progressWrapper">
       <div style="background:var(--bg-body); height:4px; border-radius:var(--radius); overflow:hidden;">
         <div id="progressBar" style="width:0%; height:100%; background:var(--secondary); transition:width 0.2s;"></div>
       </div>
-      <small style="color:var(--secondary); display:block; margin-top:5px;">Subiendo video...</small>
+      <small style="color:var(--secondary); display:block; margin-top:5px;">Subiendo clase...</small>
     </div>
 
     <div>
-      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Título del Video</label>
-      <input type="text" id="vTitle" placeholder="Ej: Gameplay Ep. 1..." />
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Título de la Clase</label>
+      <input type="text" id="cTitle" placeholder="Ej: Introducción, Lección 1..." />
     </div>
 
     <div>
-      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Archivo MP4</label>
-      <input type="file" id="vFile" accept="video/*" />
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Archivo (video)</label>
+      <input type="file" id="cFile" accept="video/*" />
     </div>
 
     <div>
-      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Proyecto</label>
-      <select id="vProject">
-        {% for p in projects %}
-          <option value="{{ p.id }}" {% if p.id == selected_pid %}selected{% endif %}>{{ p.name }}</option>
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Escuela</label>
+      <select id="uSchool" onchange="syncUploadCourseOptions()">
+        <option value="__ALL__">📦 Cualquiera</option>
+        {% for s in schools_tree %}
+          <option value="{{ s.school.id }}">{{ s.school.name }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <button class="btn-main" onclick="uploadVideo()">Subir Video 🚀</button>
+    <div>
+      <label style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.3rem; display:block;">Curso</label>
+      <select id="uCourse">
+        {% for s in schools_tree %}
+          {% for c in s.courses %}
+            <option value="{{ c.course.id }}" data-school-id="{{ s.school.id }}">{{ c.course.name }}</option>
+          {% endfor %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <button class="btn-main" onclick="uploadClass()">Subir Clase 🚀</button>
 
     <div style="grid-column: 1/-1; display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-      <input type="text" id="newProjectName" placeholder="Nuevo proyecto (Ej: Campaña Enero)" style="max-width:420px;" />
-      <button class="btn-ghost" onclick="createProject()">Crear proyecto ➕</button>
-      <span style="color:var(--text-muted); font-size:0.9rem;">
-        Total videos: <strong style="color:var(--text-main);">{{ total_videos }}</strong>
+      <input type="text" id="newSchoolName" placeholder="Nueva escuela (Ej: Salchi Academy)" style="max-width:300px;" />
+      <button class="btn-ghost" onclick="createSchool()">Crear escuela ➕</button>
+
+      <span style="width:1px; height:22px; background:var(--border); opacity:0.8;"></span>
+
+      <select id="courseSchoolPick" style="max-width:280px;">
+        {% for s in schools_tree %}
+          <option value="{{ s.school.id }}">{{ s.school.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" id="newCourseName" placeholder="Nuevo curso (Ej: Costura Básica)" style="max-width:320px;" />
+      <button class="btn-ghost" onclick="createCourse()">Crear curso ➕</button>
+
+      <span style="color:var(--text-muted); font-size:0.9rem; margin-left:auto;">
+        Total clases: <strong style="color:var(--text-main);">{{ total_classes }}</strong>
       </span>
     </div>
   </div>
 
   <div class="topbar">
-    <!-- ✅ Filtro por proyecto (no renderizar todo) -->
     <div class="filter-control">
-      <label style="color:var(--text-muted); font-size:0.9rem;">Proyecto:</label>
-      <select class="filter-select" id="projectFilter" onchange="filterByProject(this.value)">
-        <option value="__ALL__">📦 Todos</option>
-        {% for p in projects %}
-          <option value="{{ p.id }}" {% if p.id == selected_pid %}selected{% endif %}>{{ p.name }}</option>
+      <label style="color:var(--text-muted); font-size:0.9rem;">Escuela:</label>
+      <select class="filter-select" id="schoolFilter" onchange="onSchoolFilterChange(this.value)">
+        <option value="__ALL__" {% if selected_sid == "__ALL__" %}selected{% endif %}>📦 Todas</option>
+        {% for s in schools_tree %}
+          <option value="{{ s.school.id }}" {% if s.school.id == selected_sid %}selected{% endif %}>
+            {{ s.school.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-control">
+      <label style="color:var(--text-muted); font-size:0.9rem;">Curso:</label>
+      <select class="filter-select" id="courseFilter" onchange="onCourseFilterChange(this.value)">
+        <option value="__ALL__">📚 Todos</option>
+        {% for s in schools_tree %}
+          {% for c in s.courses %}
+            <option value="{{ c.course.id }}"
+                    data-school-id="{{ s.school.id }}"
+                    {% if c.course.id == selected_cid %}selected{% endif %}>
+              {{ c.course.name }}
+            </option>
+          {% endfor %}
         {% endfor %}
       </select>
     </div>
@@ -411,99 +469,125 @@
       <label style="color:var(--text-muted); font-size:0.9rem;">Ordenar:</label>
       <select class="sort-select" id="sortSelect" onchange="sortAllGrids(this.value)">
         <option value="viewsDesc">👁️ Populares</option>
-        <option value="viewsAsc">👁️ Menos Vistos</option>
+        <option value="viewsAsc">👁️ Menos Vistas</option>
         <option value="newest">📅 Recientes</option>
-        <option value="oldest">📅 Antiguos</option>
+        <option value="oldest">📅 Antiguas</option>
       </select>
     </div>
   </div>
 
-  <!-- ================== PROJECT SECTIONS ================== -->
-  {# ✅ Renderizar SOLO el proyecto seleccionado (o todos si __ALL__) #}
-  {% for project in projects_with_videos %}
-    {% if selected_pid == "__ALL__" or project.project.id == selected_pid %}
-      <section class="project-section">
-        <div class="project-header">
-          <div class="project-title">
-            <h2>{{ project.project.name }}</h2>
-            <span class="pill">{{ project.videos|length }} videos</span>
+  <!-- ================== ESCUELAS / CURSOS / CLASES ================== -->
+  {% for school_block in schools_tree %}
+    {% if selected_sid == "__ALL__" or school_block.school.id == selected_sid %}
+      <section class="school-section" data-school-section="{{ school_block.school.id }}">
+        <div class="school-header">
+          <div class="title-row">
+            <h2>🏫 {{ school_block.school.name }}</h2>
+            <span class="pill">{{ school_block.courses|length }} cursos</span>
           </div>
 
           <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-            {% if project.project.id != "general" %}
-              <button class="btn-danger" onclick="deleteProject('{{ project.project.id }}', '{{ project.project.name|e }}')">
-                Borrar proyecto 🧨
-              </button>
-            {% else %}
-              <span style="color:var(--text-muted); font-size:0.85rem;">(Proyecto base)</span>
-            {% endif %}
+            <button class="btn-danger"
+                    onclick="deleteSchool('{{ school_block.school.id }}', '{{ school_block.school.name|e }}')">
+              Borrar escuela 🧨
+            </button>
           </div>
         </div>
 
-        <div class="video-grid" data-grid="project" data-project-id="{{ project.project.id }}">
-          {% for video in project.videos %}
-            <div class="video-card"
-                 id="card-{{ video.id }}"
-                 data-views="{{ video.views|default(0) }}"
-                 data-timestamp="{{ video.timestamp|default(0) }}">
-
-              <div class="thumb-container">
-                <img src="/static_thumbs/{{ video.thumb }}" loading="lazy" alt="Thumbnail" />
-                <div class="views-badge">👁️ {{ video.views|default(0) }}</div>
+        {% for course_block in school_block.courses %}
+          {% if selected_cid == "__ALL__" or course_block.course.id == selected_cid %}
+            <div class="course-header" data-course-section="{{ course_block.course.id }}">
+              <div class="title-row">
+                <h3>📘 {{ course_block.course.name }}</h3>
+                <span class="pill2">{{ course_block.classes|length }} clases</span>
               </div>
 
-              <div class="info">
-                <h3 class="video-title" title="{{ video.title }}">{{ video.title }}</h3>
-
-                <!-- Move project -->
-                <div class="row">
-                  <select id="mv-{{ video.id }}" style="flex:1; background-color:var(--surface);">
-                    {% for p in projects %}
-                      <option value="{{ p.id }}" {% if p.id == video.project_id %}selected{% endif %}>{{ p.name }}</option>
-                    {% endfor %}
-                  </select>
-                  <button class="btn-icon" onclick="moveVideo('{{ video.id }}')" title="Mover a proyecto">↪️</button>
-                </div>
-
-                <!-- Social -->
-                <div class="row">
-                  <input type="text" id="tw-{{ video.id }}" value="{{ video.twitter_link }}" placeholder="Enlace social..." />
-                  <button class="btn-icon" onclick="saveTwitter('{{ video.id }}')" title="Guardar Link">💾</button>
-                </div>
-
-                <div class="actions">
-                  <a href="/videos/watch/{{ video.id }}" target="_blank" class="btn-act view" title="Ver video">Ver</a>
-
-                  <button onclick="copyLink(this, '{{ video.id }}')" class="btn-act copy" title="Copiar enlace">
-                    Link 🔗
-                  </button>
-
-                  <button onclick="deleteVideo('{{ video.id }}')" class="btn-act del" title="Borrar video">
-                    Borrar
-                  </button>
-                </div>
+              <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                <button class="btn-danger"
+                        onclick="deleteCourse('{{ course_block.course.id }}', '{{ course_block.course.name|e }}')">
+                  Borrar curso 🧨
+                </button>
               </div>
             </div>
-          {% endfor %}
-        </div>
+
+            <div class="class-grid"
+                 data-grid="course"
+                 data-school-id="{{ school_block.school.id }}"
+                 data-course-id="{{ course_block.course.id }}">
+              {% for cls in course_block.classes %}
+                <div class="class-card"
+                     id="card-{{ cls.id }}"
+                     data-views="{{ cls.views|default(0) }}"
+                     data-timestamp="{{ cls.timestamp|default(0) }}">
+
+                  <div class="thumb-container">
+                    <img src="/static_thumbs/{{ cls.thumb }}" loading="lazy" alt="Miniatura" />
+                    <div class="views-badge">👁️ {{ cls.views|default(0) }}</div>
+                  </div>
+
+                  <div class="info">
+                    <h3 class="class-title" title="{{ cls.title }}">{{ cls.title }}</h3>
+
+                    <!-- Move class (a otro curso) -->
+                    <div class="row">
+                      <select id="mv-{{ cls.id }}" style="flex:1; background-color:var(--surface);">
+                        {% for s2 in schools_tree %}
+                          {% for c2 in s2.courses %}
+                            <option value="{{ c2.course.id }}"
+                                    data-school-id="{{ s2.school.id }}"
+                                    {% if c2.course.id == cls.course_id %}selected{% endif %}>
+                              {{ s2.school.name }} — {{ c2.course.name }}
+                            </option>
+                          {% endfor %}
+                        {% endfor %}
+                      </select>
+                      <button class="btn-icon" onclick="moveClass('{{ cls.id }}')" title="Mover a otro curso">↪️</button>
+                    </div>
+
+                    <!-- Social link (opcional) -->
+                    <div class="row">
+                      <input type="text" id="sl-{{ cls.id }}" value="{{ cls.social_link }}" placeholder="Link (Drive, Docs, Notas...)" />
+                      <button class="btn-icon" onclick="saveSocial('{{ cls.id }}')" title="Guardar Link">💾</button>
+                    </div>
+
+                    <div class="actions">
+                      <a href="/courses/classes/watch/{{ cls.id }}" target="_blank" class="btn-act view" title="Ver clase">Ver</a>
+
+                      <button onclick="copyLink(this, '{{ cls.id }}')" class="btn-act copy" title="Copiar enlace">
+                        Link 🔗
+                      </button>
+
+                      <button onclick="deleteClass('{{ cls.id }}')" class="btn-act del" title="Borrar clase">
+                        Borrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endfor %}
       </section>
     {% endif %}
   {% endfor %}
 
   <script>
+    // =========================
+    // Sorting
+    // =========================
     function sortGrid(gridEl, criteria) {
-      const cards = Array.from(gridEl.getElementsByClassName('video-card'));
+      const cards = Array.from(gridEl.getElementsByClassName('class-card'));
 
       cards.sort((a, b) => {
         const viewsA = parseInt(a.getAttribute('data-views') || "0");
         const viewsB = parseInt(b.getAttribute('data-views') || "0");
-        const timeA = parseFloat(a.getAttribute('data-timestamp') || "0");
-        const timeB = parseFloat(b.getAttribute('data-timestamp') || "0");
+        const timeA  = parseFloat(a.getAttribute('data-timestamp') || "0");
+        const timeB  = parseFloat(b.getAttribute('data-timestamp') || "0");
 
         if (criteria === 'viewsDesc') return viewsB - viewsA;
-        if (criteria === 'viewsAsc') return viewsA - viewsB;
-        if (criteria === 'newest') return timeB - timeA;
-        if (criteria === 'oldest') return timeA - timeB;
+        if (criteria === 'viewsAsc')  return viewsA - viewsB;
+        if (criteria === 'newest')    return timeB - timeA;
+        if (criteria === 'oldest')    return timeA - timeB;
         return 0;
       });
 
@@ -511,30 +595,90 @@
     }
 
     function sortAllGrids(criteria) {
-      const grids = Array.from(document.querySelectorAll('[data-grid="project"]'));
+      const grids = Array.from(document.querySelectorAll('[data-grid="course"]'));
       grids.forEach(g => sortGrid(g, criteria));
     }
 
-    // ✅ Filtro por proyecto (server-side via query param)
-    function filterByProject(projectId) {
+    // =========================
+    // Filters (server-side via query params)
+    // =========================
+    function onSchoolFilterChange(schoolId) {
       const url = new URL(window.location.href);
-      // si eliges "Todos", lo mandamos como __ALL__ (y el template lo soporta)
-      url.searchParams.set('project_id', projectId);
+      url.searchParams.set('school_id', schoolId);
+      // al cambiar escuela, reinicia el curso a __ALL__ para evitar combinaciones inválidas
+      url.searchParams.set('course_id', '__ALL__');
       window.location.href = url.toString();
     }
 
-    // ---------- Upload ----------
-    function uploadVideo() {
-      const fileInput = document.getElementById('vFile');
-      const titleInput = document.getElementById('vTitle');
-      const projectSelect = document.getElementById('vProject');
+    function onCourseFilterChange(courseId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('course_id', courseId);
+      // si el usuario escoge un curso específico, mantenemos la escuela como esté (o __ALL__)
+      window.location.href = url.toString();
+    }
 
-      if (fileInput.files.length === 0) return alert("⚠️ Por favor selecciona un archivo.");
+    function syncCourseFilterOptions() {
+      const schoolSel = document.getElementById('schoolFilter');
+      const courseSel = document.getElementById('courseFilter');
+      if (!schoolSel || !courseSel) return;
+
+      const sid = schoolSel.value;
+      const opts = Array.from(courseSel.querySelectorAll('option'));
+
+      opts.forEach(opt => {
+        if (opt.value === '__ALL__') { opt.hidden = false; return; }
+        const osid = opt.getAttribute('data-school-id');
+        opt.hidden = (sid !== '__ALL__' && osid !== sid);
+      });
+
+      // si el curso seleccionado ya no pertenece a la escuela, lo mandamos a __ALL__
+      const selectedOpt = courseSel.options[courseSel.selectedIndex];
+      if (selectedOpt && selectedOpt.hidden) courseSel.value = '__ALL__';
+    }
+
+    // =========================
+    // Upload form school->course sync
+    // =========================
+    function syncUploadCourseOptions() {
+      const schoolSel = document.getElementById('uSchool');
+      const courseSel = document.getElementById('uCourse');
+      if (!schoolSel || !courseSel) return;
+
+      const sid = schoolSel.value;
+      const opts = Array.from(courseSel.querySelectorAll('option'));
+
+      let firstVisible = null;
+
+      opts.forEach(opt => {
+        const osid = opt.getAttribute('data-school-id');
+        const hidden = (sid !== '__ALL__' && osid !== sid);
+        opt.hidden = hidden;
+        if (!hidden && !firstVisible) firstVisible = opt.value;
+      });
+
+      // si el actual quedó oculto, escoge el primero visible
+      const cur = courseSel.value;
+      const curOpt = opts.find(o => o.value === cur);
+      if (!curOpt || curOpt.hidden) {
+        if (firstVisible) courseSel.value = firstVisible;
+      }
+    }
+
+    // =========================
+    // API Calls
+    // =========================
+    function uploadClass() {
+      const fileInput   = document.getElementById('cFile');
+      const titleInput  = document.getElementById('cTitle');
+      const courseSelect= document.getElementById('uCourse');
+
+      if (!fileInput || fileInput.files.length === 0) return alert("⚠️ Por favor selecciona un archivo.");
+      if (!courseSelect || !courseSelect.value) return alert("⚠️ Selecciona un curso.");
 
       const formData = new FormData();
       formData.append("file", fileInput.files[0]);
-      formData.append("title", titleInput.value);
-      formData.append("project_id", projectSelect.value);
+      formData.append("title", (titleInput.value || "").trim());
+      formData.append("course_id", courseSelect.value);
 
       const xhr = new XMLHttpRequest();
       document.getElementById('progressWrapper').style.display = 'block';
@@ -548,20 +692,19 @@
 
       xhr.onload = () => {
         if (xhr.status === 200) location.reload();
-        else alert("❌ Error subiendo el video.");
+        else alert("❌ Error subiendo la clase.");
       };
 
-      xhr.open("POST", "/videos/upload", true);
+      xhr.open("POST", "/courses/classes/upload", true);
       xhr.send(formData);
     }
 
-    // ---------- Projects ----------
-    async function createProject() {
-      const name = (document.getElementById('newProjectName').value || "").trim();
-      if (!name) return alert("Escribe un nombre para el proyecto.");
+    async function createSchool() {
+      const name = (document.getElementById('newSchoolName').value || "").trim();
+      if (!name) return alert("Escribe un nombre para la escuela.");
 
       try {
-        const res = await fetch('/videos/projects/create', {
+        const res = await fetch('/courses/schools/create', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ name })
@@ -569,39 +712,74 @@
         if (!res.ok) throw new Error("No se pudo crear");
         location.reload();
       } catch(e) {
-        alert("❌ Error creando proyecto.");
+        alert("❌ Error creando escuela.");
       }
     }
 
-    async function deleteProject(projectId, projectName) {
-      if (!confirm(`¿Borrar el proyecto "${projectName}"?\n\nEsto borrará también TODOS sus videos y archivos.`)) return;
+    async function deleteSchool(schoolId, schoolName) {
+      if (!confirm(`¿Borrar la escuela "${schoolName}"?\n\nEsto borrará también TODOS sus cursos y clases.`)) return;
 
       try {
-        const res = await fetch('/videos/projects/delete', {
+        const res = await fetch('/courses/schools/delete', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ project_id: projectId })
+          body: JSON.stringify({ school_id: schoolId })
         });
         if (!res.ok) throw new Error("No se pudo borrar");
         location.reload();
       } catch(e) {
-        alert("❌ Error borrando proyecto.");
+        alert("❌ Error borrando escuela.");
       }
     }
 
-    async function moveVideo(videoId) {
-      const sel = document.getElementById(`mv-${videoId}`);
-      const projectId = sel.value;
+    async function createCourse() {
+      const schoolId = (document.getElementById('courseSchoolPick').value || "").trim();
+      const name = (document.getElementById('newCourseName').value || "").trim();
+      if (!schoolId) return alert("Selecciona una escuela para el curso.");
+      if (!name) return alert("Escribe un nombre para el curso.");
+
+      try {
+        const res = await fetch('/courses/courses/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ school_id: schoolId, name })
+        });
+        if (!res.ok) throw new Error("No se pudo crear");
+        location.reload();
+      } catch(e) {
+        alert("❌ Error creando curso.");
+      }
+    }
+
+    async function deleteCourse(courseId, courseName) {
+      if (!confirm(`¿Borrar el curso "${courseName}"?\n\nEsto borrará también TODAS sus clases.`)) return;
+
+      try {
+        const res = await fetch('/courses/courses/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ course_id: courseId })
+        });
+        if (!res.ok) throw new Error("No se pudo borrar");
+        location.reload();
+      } catch(e) {
+        alert("❌ Error borrando curso.");
+      }
+    }
+
+    async function moveClass(classId) {
+      const sel = document.getElementById(`mv-${classId}`);
+      const courseId = sel.value;
 
       const btn = sel.parentElement.querySelector('.btn-icon');
       const original = btn.innerHTML;
       btn.innerHTML = "⏳";
 
       try {
-        const res = await fetch('/videos/move', {
+        const res = await fetch('/courses/classes/move', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ id: videoId, project_id: projectId })
+          body: JSON.stringify({ id: classId, course_id: courseId })
         });
         if (!res.ok) throw new Error("No se pudo mover");
 
@@ -609,24 +787,24 @@
         setTimeout(() => location.reload(), 450);
       } catch(e) {
         btn.innerHTML = original;
-        alert("❌ Error moviendo video.");
+        alert("❌ Error moviendo clase.");
       }
     }
 
-    // ---------- Social ----------
-    async function saveTwitter(id) {
-      const val = document.getElementById(`tw-${id}`).value;
+    async function saveSocial(id) {
+      const val = document.getElementById(`sl-${id}`).value;
       const btn = document.querySelector(`#card-${id} .row button[title="Guardar Link"]`);
 
       const originalText = btn.innerHTML;
       btn.innerHTML = "⏳";
 
       try {
-        await fetch('/videos/update_social', {
+        const res = await fetch('/courses/classes/update_social', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ id: id, link: val })
         });
+        if (!res.ok) throw new Error("Falló");
         btn.innerHTML = "✅";
         setTimeout(() => btn.innerHTML = originalText, 1200);
       } catch(e) {
@@ -635,28 +813,26 @@
       }
     }
 
-    // ---------- Delete video ----------
-    async function deleteVideo(id) {
-      if (!confirm("¿Estás seguro de que quieres borrar este video? No hay vuelta atrás.")) return;
+    async function deleteClass(id) {
+      if (!confirm("¿Estás seguro de que quieres borrar esta clase? No hay vuelta atrás.")) return;
 
       try {
-        const res = await fetch(`/videos/delete/${id}`);
+        const res = await fetch(`/courses/classes/delete/${id}`);
         if (res.ok) {
           const card = document.getElementById(`card-${id}`);
           card.style.transform = "scale(0.9)";
           card.style.opacity = "0";
           setTimeout(() => card.remove(), 200);
         } else {
-          alert("No se pudo borrar el video.");
+          alert("No se pudo borrar la clase.");
         }
       } catch(e) {
         alert("Error de conexión");
       }
     }
 
-    // ---------- Copy link ----------
-    function copyLink(btnElement, videoId) {
-      const fullUrl = `${window.location.origin}/videos/watch/${videoId}`;
+    function copyLink(btnElement, classId) {
+      const fullUrl = `${window.location.origin}/courses/classes/watch/${classId}`;
 
       navigator.clipboard.writeText(fullUrl).then(() => {
         const originalText = btnElement.innerHTML;
@@ -675,26 +851,46 @@
       });
     }
 
-    // ✅ Default: ordenar por MÁS VISTO al cargar
+    // =========================
+    // Init
+    // =========================
     document.addEventListener('DOMContentLoaded', () => {
+      // Orden default: populares
       const sortSel = document.getElementById('sortSelect');
       if (sortSel) sortSel.value = 'viewsDesc';
       sortAllGrids('viewsDesc');
 
-      // Sincroniza el select del filtro con el query param si existe
+      // Ajustar opciones del filtro de curso según escuela seleccionada
+      syncCourseFilterOptions();
+
+      // Ajustar opciones del upload (school->courses)
+      const schoolFilter = document.getElementById('schoolFilter');
+      const courseFilter = document.getElementById('courseFilter');
+
+      // Si viene school_id por query, úsalo también en el upload school (para que subas donde estás mirando)
       const url = new URL(window.location.href);
-      const qpid = url.searchParams.get('project_id');
-      const filterSel = document.getElementById('projectFilter');
-      if (filterSel && qpid) {
-        filterSel.value = qpid;
-        // si estás filtrando por __ALL__, en upload preferimos el primero real (evita subir al "Todos")
-        if (qpid !== '__ALL__') {
-          const uploadSel = document.getElementById('vProject');
-          if (uploadSel) uploadSel.value = qpid;
-        }
-      } else {
-        // si no hay query, deja el upload al seleccionado por Jinja (selected_pid)
-        // (ya viene marcado en el HTML)
+      const qsid = url.searchParams.get('school_id');
+      const qcid = url.searchParams.get('course_id');
+
+      const uSchool = document.getElementById('uSchool');
+      const uCourse = document.getElementById('uCourse');
+
+      if (uSchool && qsid) uSchool.value = qsid;
+
+      // Si hay course_id específico, intenta seleccionarlo en upload
+      if (uCourse && qcid && qcid !== '__ALL__') uCourse.value = qcid;
+
+      // Si no hay qcid y sí existe un primer curso, selecciona algo visible
+      if (uCourse && (!uCourse.value || uCourse.value === '__ALL__')) {
+        // deja lo que esté, luego sync se encarga
+      }
+
+      syncUploadCourseOptions();
+
+      // Si filtro curso se quedó escondido, lo normalizamos
+      if (courseFilter) {
+        const selectedOpt = courseFilter.options[courseFilter.selectedIndex];
+        if (selectedOpt && selectedOpt.hidden) courseFilter.value = '__ALL__';
       }
     });
   </script>
